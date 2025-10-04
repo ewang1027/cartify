@@ -1,8 +1,26 @@
+# Environment variables and API keys
 .env
+.env.local
+.env.development
+.env.production
+.env.staging
+*.env
+
+# Configuration files with sensitive data
+config_local.py
+config_production.py
+secrets.py
+credentials.py
+
+# Python virtual environments
 venv/
 new_venv/
 env/
 ENV/
+.venv/
+.venv*/
+
+# Dependencies
 node_modules/
 __pycache__/
 *.pyc
@@ -48,3 +66,8 @@ Thumbs.db
 
 # JSON output files (optional - remove if you want to track them)
 *.json
+
+# API keys and secrets
+*_key.txt
+*_secret.txt
+*_credentials.txtconfig.py
