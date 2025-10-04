@@ -13,7 +13,7 @@ export const Navbar = ({ username = "Guest", budget = 0 }: NavbarProps) => {
           <div className="p-2 bg-gradient-hero rounded-lg">
             <ShoppingCart className="w-6 h-6 text-primary-foreground" />
           </div>
-          <span className="text-xl font-semibold text-foreground">CartSense</span>
+          <span className="text-xl font-semibold text-foreground">Cartify</span>
         </div>
         
         <div className="flex items-center gap-6">

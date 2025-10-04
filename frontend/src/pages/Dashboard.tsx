@@ -6,40 +6,59 @@ import { BudgetCard } from "@/components/BudgetCard";
 import { SustainabilityCard } from "@/components/SustainabilityCard";
 import { CartItem, CartItemType } from "@/components/CartItem";
 import { GlassesVideoFeed } from "@/components/GlassesVideoFeed";
+import { BudgetPreferencesDialog } from "@/components/BudgetPreferencesDialog";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
+// Mock data for testing
 const MOCK_ITEMS: CartItemType[] = [
   {
-    id: "1",
-    name: "Organic Bananas",
+    id: '1',
+    name: 'Organic Bananas',
     price: 3.99,
-    image: "https://images.unsplash.com/photo-1603833665858-e61d17a86224?w=200&h=200&fit=crop",
-    sustainabilityScore: 95,
+    image: 'https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=150&h=150&fit=crop',
+    sustainabilityScore: 85
   },
   {
-    id: "2",
-    name: "Whole Grain Bread",
-    price: 4.49,
-    image: "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=200&h=200&fit=crop",
-    sustainabilityScore: 85,
+    id: '2',
+    name: 'Local Honey',
+    price: 8.99,
+    image: 'https://images.unsplash.com/photo-1558642452-9d2a7deb7f62?w=150&h=150&fit=crop',
+    sustainabilityScore: 90
   },
   {
-    id: "3",
-    name: "Almond Milk",
-    price: 5.99,
-    image: "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=200&h=200&fit=crop",
-    sustainabilityScore: 78,
+    id: '3',
+    name: 'Plastic Water Bottle',
+    price: 1.99,
+    image: 'https://images.unsplash.com/photo-1583394838336-acd977736f90?w=150&h=150&fit=crop',
+    sustainabilityScore: 15
   },
+  {
+    id: '4',
+    name: 'Fair Trade Coffee',
+    price: 12.99,
+    image: 'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=150&h=150&fit=crop',
+    sustainabilityScore: 75
+  },
+  {
+    id: '5',
+    name: 'Bamboo Toothbrush',
+    price: 4.99,
+    image: 'https://images.unsplash.com/photo-1607619056574-7b8d3ee536b2?w=150&h=150&fit=crop',
+    sustainabilityScore: 95
+  }
 ];
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const [items, setItems] = useState<CartItemType[]>([]);
   const [syncEnabled, setSyncEnabled] = useState(false);
-  const [budget] = useState(100);
+  const [budget, setBudget] = useState(100);
+  const [sustainabilityPreference, setSustainabilityPreference] = useState<'low' | 'medium' | 'high'>('medium');
+  const [showPreferencesDialog, setShowPreferencesDialog] = useState(false);
+  const [hasSetPreferences, setHasSetPreferences] = useState(false);
 
   const totalSpent = items.reduce((sum, item) => sum + item.price, 0);
   const avgSustainability = items.length > 0
@@ -61,6 +80,24 @@ const Dashboard = () => {
       });
     }
   }, [avgSustainability, items.length]);
+
+  // Show preferences dialog on first visit
+  useEffect(() => {
+    const preferences = localStorage.getItem('userPreferences');
+    if (!preferences) {
+      setShowPreferencesDialog(true);
+    } else {
+      try {
+        const parsed = JSON.parse(preferences);
+        setBudget(parsed.budget || 100);
+        setSustainabilityPreference(parsed.sustainabilityPreference || 'medium');
+        setHasSetPreferences(true);
+      } catch (error) {
+        console.error('Error parsing saved preferences:', error);
+        setShowPreferencesDialog(true);
+      }
+    }
+  }, []);
 
   const handleRemoveItem = (id: string) => {
     setItems(items.filter(item => item.id !== id));
@@ -95,9 +132,41 @@ const Dashboard = () => {
     }
   };
 
+  const handleSavePreferences = (newBudget: number, newSustainabilityPreference: 'low' | 'medium' | 'high') => {
+    setBudget(newBudget);
+    setSustainabilityPreference(newSustainabilityPreference);
+    setHasSetPreferences(true);
+    
+    // Save to localStorage
+    const preferences = {
+      budget: newBudget,
+      sustainabilityPreference: newSustainabilityPreference
+    };
+    localStorage.setItem('userPreferences', JSON.stringify(preferences));
+    
+    toast.success("Preferences saved!", {
+      description: `Budget: $${newBudget} • ${newSustainabilityPreference === 'high' ? 'Eco Conscious' : newSustainabilityPreference === 'medium' ? 'Balanced' : 'Budget Focused'}`
+    });
+  };
+
+  const handleClosePreferencesDialog = () => {
+    setShowPreferencesDialog(false);
+    if (!hasSetPreferences) {
+      // If user closes without setting preferences, use defaults
+      setHasSetPreferences(true);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
-      <Navbar username="Alex Morgan" budget={budget} />
+      <Navbar username="Manoj" budget={budget} />
+      
+      {/* Preferences Dialog */}
+      <BudgetPreferencesDialog
+        isOpen={showPreferencesDialog}
+        onSave={handleSavePreferences}
+        onClose={handleClosePreferencesDialog}
+      />
       
       <main className="container mx-auto px-6 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
@@ -142,13 +211,6 @@ const Dashboard = () => {
                     <span className="ml-3 text-lg text-muted-foreground">({items.length})</span>
                   )}
                 </h2>
-                <Button
-                  onClick={handleAddMockItem}
-                  className="bg-gradient-hero text-primary-foreground shadow-soft hover:shadow-md transition-all"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Item
-                </Button>
               </div>
 
               {items.length === 0 ? (

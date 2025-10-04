@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import heroImage from "@/assets/hero-bg.jpg";
+// import heroImage from "@/assets/hero-bg.jpg";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -23,7 +23,7 @@ const Index = () => {
         <div className="absolute inset-0 z-0">
           <div 
             className="absolute inset-0 bg-cover bg-center"
-            style={{ backgroundImage: `url(${heroImage})` }}
+            // style={{ backgroundImage: `url(${heroImage})` }}
           />
           <div className="absolute inset-0 bg-background/90" />
         </div>
@@ -34,7 +34,7 @@ const Index = () => {
             <div className="p-2.5 bg-gradient-hero rounded-xl">
               <ShoppingCart className="w-7 h-7 text-primary-foreground" />
             </div>
-            <span className="text-3xl font-bold text-foreground">CartSense</span>
+            <span className="text-3xl font-bold text-foreground">Cartify</span>
           </div>
 
           <h1 className="text-6xl md:text-7xl font-bold text-foreground mb-8 leading-tight tracking-tight">
@@ -107,7 +107,7 @@ const Index = () => {
               <div>
                 <h4 className="font-semibold text-foreground mb-1">Connect Glasses</h4>
                 <p className="text-sm text-muted-foreground">
-                  Pair your Ray-Ban Meta smart glasses with CartSense.
+                  Pair your Ray-Ban Meta smart glasses with Cartify.
                 </p>
               </div>
             </div>
