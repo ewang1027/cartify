@@ -34,7 +34,7 @@ const Index = () => {
             <div className="p-2.5 bg-gradient-hero rounded-xl">
               <ShoppingCart className="w-7 h-7 text-primary-foreground" />
             </div>
-            <span className="text-3xl font-bold text-foreground">CartSense</span>
+            <span className="text-3xl font-bold text-foreground">Cartify</span>
           </div>
 
           <h1 className="text-6xl md:text-7xl font-bold text-foreground mb-8 leading-tight tracking-tight">
@@ -107,7 +107,7 @@ const Index = () => {
               <div>
                 <h4 className="font-semibold text-foreground mb-1">Connect Glasses</h4>
                 <p className="text-sm text-muted-foreground">
-                  Pair your Ray-Ban Meta smart glasses with CartSense.
+                  Pair your Ray-Ban Meta smart glasses with Cartify.
                 </p>
               </div>
             </div>
