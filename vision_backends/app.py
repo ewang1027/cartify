@@ -8,6 +8,7 @@ import time
 import os
 import subprocess
 import tempfile
+import numpy as np
 
 app = Flask(__name__)
 CORS(app)
@@ -15,71 +16,60 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 
 # RTMP stream configuration
 RTMP_URL = "rtmp://3.96.138.25:1935/live/key"
-streaming_active = False
+
+# Camera streaming variables
+camera = None
+streaming = False
 stream_thread = None
 
-def capture_rtmp_frame():
-    """
-    Capture a single frame from RTMP stream using FFmpeg
-    Returns: (success, frame_data)
-    """
+def stream_camera():
+    """Stream camera frames to connected clients"""
+    global camera, streaming
+    
     try:
-        # Create temporary file for frame capture
-        with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_file:
-            temp_path = temp_file.name
+        # Initialize camera with ID 2
+        camera = cv2.VideoCapture(2)
         
-        # Capture frame using FFmpeg
-        cmd = [
-            'ffmpeg', '-i', RTMP_URL,
-            '-vframes', '1',  # Capture just 1 frame
-            '-y',  # Overwrite output file
-            temp_path
-        ]
+        if not camera.isOpened():
+            socketio.emit('stream_error', {'message': 'Failed to open camera ID 2'})
+            return
         
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        # Set camera properties for better performance
+        camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        camera.set(cv2.CAP_PROP_FPS, 30)
         
-        if result.returncode == 0 and os.path.exists(temp_path):
-            # Read frame and encode as base64
-            with open(temp_path, 'rb') as f:
-                frame_data = base64.b64encode(f.read()).decode('utf-8')
+        print("Camera ID 2 opened successfully")
+        
+        while streaming:
+            ret, frame = camera.read()
             
-            # Clean up temporary file
-            os.unlink(temp_path)
-            return True, frame_data
-        else:
-            if os.path.exists(temp_path):
-                os.unlink(temp_path)
-            return False, None
+            if not ret:
+                print("Failed to read frame from camera")
+                break
+            
+            # Convert frame to JPEG and encode as base64
+            _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            frame_data = base64.b64encode(buffer).decode('utf-8')
+            
+            # Emit frame to all connected clients
+            socketio.emit('video_frame', {'frame': frame_data})
+            
+            # Control frame rate
+            time.sleep(1/30)  # ~30 FPS
             
     except Exception as e:
-        print(f"Error capturing RTMP frame: {e}")
-        return False, None
-
-def stream_video():
-    """
-    Continuous video streaming function
-    """
-    global streaming_active
-    while streaming_active:
-        try:
-            success, frame_data = capture_rtmp_frame()
-            if success:
-                socketio.emit('video_frame', {'frame': frame_data})
-            else:
-                socketio.emit('stream_error', {'message': 'Failed to capture frame'})
-            
-            # Control frame rate (adjust as needed)
-            time.sleep(0.033)  # ~30 FPS
-            
-        except Exception as e:
-            print(f"Streaming error: {e}")
-            socketio.emit('stream_error', {'message': str(e)})
-            break
+        print(f"Error in camera stream: {str(e)}")
+        socketio.emit('stream_error', {'message': f'Camera streaming error: {str(e)}'})
+    
+    finally:
+        if camera:
+            camera.release()
+            print("Camera released")
 
 @socketio.on('connect')
 def handle_connect():
     print('Client connected')
-    emit('connected', {'message': 'Connected to video stream'})
 
 @socketio.on('disconnect')
 def handle_disconnect():
@@ -87,57 +77,43 @@ def handle_disconnect():
 
 @socketio.on('start_stream')
 def handle_start_stream():
-    """
-    Start video streaming from RTMP source
-    """
-    global streaming_active, stream_thread
+    """Start camera streaming"""
+    global streaming, stream_thread
     
-    if not streaming_active:
-        streaming_active = True
-        stream_thread = threading.Thread(target=stream_video)
+    if not streaming:
+        streaming = True
+        stream_thread = threading.Thread(target=stream_camera)
         stream_thread.daemon = True
         stream_thread.start()
-        emit('stream_started', {'message': 'Video stream started'})
+        
+        print("Camera streaming started")
+        emit('stream_started', {'message': 'Camera stream started successfully'})
+    else:
+        emit('stream_started', {'message': 'Camera stream already running'})
 
 @socketio.on('stop_stream')
 def handle_stop_stream():
-    """
-    Stop video streaming
-    """
-    global streaming_active, stream_thread
+    """Stop camera streaming"""
+    global streaming, stream_thread
     
-    if streaming_active:
-        streaming_active = False
-        if stream_thread:
+    if streaming:
+        streaming = False
+        
+        # Wait for stream thread to finish
+        if stream_thread and stream_thread.is_alive():
             stream_thread.join(timeout=2)
-        emit('stream_stopped', {'message': 'Video stream stopped'})
+        
+        print("Camera streaming stopped")
+        emit('stream_stopped', {'message': 'Camera stream stopped'})
     else:
-        emit('stream_error', {'message': 'No active stream to stop'})
+        emit('stream_stopped', {'message': 'Camera stream was not running'})
 
-@socketio.on('get_frame')
-def handle_get_frame():
-    """
-    Get a single frame from the RTMP stream
-    """
-    success, frame_data = capture_rtmp_frame()
-    if success:
-        emit('frame_data', {'frame': frame_data})
-    else:
-        emit('stream_error', {'message': 'Failed to capture frame'})
-
-@app.route('/')
-def index():
-    return {
-        'message': 'Video streaming server is running',
-        'rtmp_url': RTMP_URL,
-        'endpoints': {
-            'start_stream': 'Start continuous video streaming',
-            'stop_stream': 'Stop video streaming',
-            'get_frame': 'Get single frame'
-        }
-    }
+@app.route('/health')
+def health_check():
+    return {'status': 'healthy', 'camera_active': streaming}
 
 if __name__ == '__main__':
     print(f"Starting video streaming server...")
     print(f"RTMP URL: {RTMP_URL}")
+    print("Camera ID 2 will be used for streaming")
     socketio.run(app, host='0.0.0.0', port=5002, debug=True, allow_unsafe_werkzeug=True)
