@@ -1,10 +1,21 @@
+# Core dependencies for real grocery sustainability scoring
+flask
+flask-cors
+requests
+feedparser
+python-dotenv
+google-generativeai
+beautifulsoup4
+lxml
+rapidfuzz
+
+# Additional dependencies for enhanced functionality
 opencv-python
 google-genai
 inference-sdk
 pyobjc
 mediapipe
 ml-dtypes>=0.5.3
-python-dotenv
 torch>=2.2.0
 torchvision
 torchaudio
