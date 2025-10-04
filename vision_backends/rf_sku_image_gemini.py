@@ -431,20 +431,22 @@ async def main(image_path: Path, crops_dir: Path) -> None:
 
     start_time: float = time.perf_counter()
 
-    workflow_result: Any = inference_client.run_workflow(
+    workflow_task: asyncio.Future[Any] = asyncio.to_thread(
+        inference_client.run_workflow,
         workspace_name=ROBOFLOW_WORKSPACE,
         workflow_id=ROBOFLOW_WORKFLOW_ID,
         images={"image": str(image_path)},
         use_cache=True,
     )
+    ocr_task: asyncio.Future[List[OCRWord]] = asyncio.to_thread(load_ocr_words, image_path)
+
+    workflow_result, ocr_words = await asyncio.gather(workflow_task, ocr_task)
 
     detections: List[Dict[str, Any]] = extract_bounding_boxes(workflow_result)
 
     if not detections:
         print("No bounding boxes found in the workflow result.")
         return
-
-    ocr_words: List[OCRWord] = load_ocr_words(image_path)
 
     results: List[Dict[str, Any]] = await process_detections(
         image_path,
