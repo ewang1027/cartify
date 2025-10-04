@@ -98,8 +98,6 @@ def handle_start_stream():
         stream_thread.daemon = True
         stream_thread.start()
         emit('stream_started', {'message': 'Video stream started'})
-    else:
-        emit('stream_error', {'message': 'Stream already active'})
 
 @socketio.on('stop_stream')
 def handle_stop_stream():
