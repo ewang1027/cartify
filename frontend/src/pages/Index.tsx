@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import heroImage from "@/assets/hero-bg.jpg";
+// import heroImage from "@/assets/hero-bg.jpg";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -23,7 +23,7 @@ const Index = () => {
         <div className="absolute inset-0 z-0">
           <div 
             className="absolute inset-0 bg-cover bg-center"
-            style={{ backgroundImage: `url(${heroImage})` }}
+            // style={{ backgroundImage: `url(${heroImage})` }}
           />
           <div className="absolute inset-0 bg-background/90" />
         </div>
