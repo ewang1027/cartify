@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import sys, json, re
+import sys, json, re, time
 import objc
 from Foundation import NSMakeRange
 from PIL import Image, ImageDraw
@@ -138,8 +138,12 @@ def main():
     annotate = sys.argv[2] if len(sys.argv) >= 3 else None
     level = sys.argv[3] if len(sys.argv) >= 4 else "accurate"
 
+    start_time: float = time.perf_counter()
     result = recognize_with_boxes(image_path, annotate_out=annotate, level=level)
+    latency_sec: float = time.perf_counter() - start_time
+    result["latency_sec"] = latency_sec
     print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(f"latency_sec: {latency_sec:.3f}s")
 
 if __name__ == "__main__":
     main()
