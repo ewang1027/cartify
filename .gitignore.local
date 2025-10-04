@@ -1,18 +1,8 @@
-.env
-venv/
-new_venv/
-env/
-ENV/
-node_modules/
+# API Keys and sensitive data
+backend/config.py
+
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.pyw
-*.pyz
-*.pywz
-*.pyzw
-*.pyzwz
 *.py[cod]
 *$py.class
 *.so
@@ -32,6 +22,12 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+
+# Virtual environments
+new_venv/
+venv/
+env/
+ENV/
 
 # IDE
 .vscode/
