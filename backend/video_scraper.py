@@ -31,14 +31,6 @@ def video_feed():
     return Response(generate_frames(),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
-@app.route('/stats')
-def stats():
-    """Return current detection stats as JSON"""
-    global stream
-    if stream:
-        return json.dumps(stream.detection_stats)
-    return json.dumps({"error": "Stream not initialized"})
-
 @socketio.on('connect')
 def handle_connect():
     print('Client connected to WebSocket')
