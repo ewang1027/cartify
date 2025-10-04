@@ -1,16 +1,19 @@
 import argparse
 import asyncio
 import json
+import math
 import os
 import re
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TypedDict
 
 import cv2
 from google import genai
 from google.genai import types
 from inference_sdk import InferenceHTTPClient
+
+from apple_ocr import recognize_with_boxes
 
 from dotenv import load_dotenv
 
@@ -20,6 +23,14 @@ ROBOFLOW_WORKSPACE: str = "orbifold-ai"
 ROBOFLOW_WORKFLOW_ID: str = "detect-count-and-visualize-3"
 MODEL_NAME: str = "gemini-flash-lite-latest"
 DEFAULT_CROPS_DIR: Path = Path(__file__).resolve().parent / "crops"
+
+
+class OCRWord(TypedDict):
+    text: str
+    left: float
+    top: float
+    right: float
+    bottom: float
 
 
 def extract_bounding_boxes(workflow_result: Any) -> List[Dict[str, Any]]:
@@ -102,6 +113,75 @@ def detection_to_bbox(
     return left, top, right, bottom
 
 
+def load_ocr_words(image_path: Path) -> List[OCRWord]:
+    try:
+        ocr_result: Dict[str, Any] = recognize_with_boxes(str(image_path))
+    except Exception as exc:  # pylint: disable=broad-except
+        print(f"Failed to run OCR: {exc}")
+        return []
+
+    words: List[OCRWord] = []
+
+    for line in ocr_result.get("lines", []):
+        for word in line.get("words", []):
+            box: Dict[str, Any] = word.get("box", {})
+            left: float = float(box.get("x", 0.0))
+            top: float = float(box.get("y", 0.0))
+            width: float = float(box.get("w", 0.0))
+            height: float = float(box.get("h", 0.0))
+            words.append(
+                OCRWord(
+                    text=str(word.get("text", "")),
+                    left=left,
+                    top=top,
+                    right=left + width,
+                    bottom=top + height,
+                )
+            )
+
+    return words
+
+
+def expand_bbox_with_text(
+    bbox: Tuple[int, int, int, int],
+    ocr_words: List[OCRWord],
+    image_width: int,
+    image_height: int,
+) -> Tuple[Tuple[int, int, int, int], Optional[str]]:
+    left, top, right, bottom = bbox
+
+    best_word: Optional[OCRWord] = None
+    best_gap: float = math.inf
+    best_center_delta: float = math.inf
+    product_center_x: float = (left + right) / 2.0
+
+    for word in ocr_words:
+        if word["top"] < top:
+            continue
+
+        gap: float = max(0.0, word["top"] - bottom)
+        word_center_x: float = (word["left"] + word["right"]) / 2.0
+        center_delta: float = abs(product_center_x - word_center_x)
+
+        if gap < best_gap or (math.isclose(gap, best_gap) and center_delta < best_center_delta):
+            best_word = word
+            best_gap = gap
+            best_center_delta = center_delta
+
+    if best_word is None:
+        return (left, top, right, bottom), None
+
+    expanded_left: int = max(0, int(math.floor(min(left, best_word["left"]))))
+    expanded_right: int = min(image_width - 1, int(math.ceil(max(right, best_word["right"]))))
+    expanded_top: int = max(0, int(math.floor(min(top, best_word["top"]))))
+    expanded_bottom: int = min(image_height - 1, int(math.ceil(max(bottom, best_word["bottom"]))))
+
+    if expanded_right <= expanded_left or expanded_bottom <= expanded_top:
+        return (left, top, right, bottom), best_word["text"]
+
+    return (expanded_left, expanded_top, expanded_right, expanded_bottom), best_word["text"]
+
+
 def crop_detection(
     image: Any,
     bbox: Tuple[int, int, int, int],
@@ -119,22 +199,27 @@ def crop_detection(
     return buffer.tobytes()
 
 
-def build_contents(image_bytes: bytes) -> List[types.Content]:
+def build_contents(image_bytes: bytes, context_text: Optional[str]) -> List[types.Content]:
     prompt: str = (
         "You are an assistant that identifies retail products. "
         "Look at this cropped product image and respond with a JSON object containing "
-        "two keys: product_name and brand."
+        "three keys: product_name, brand, and price. If any value is unknown, use null. "
+        "Price should be a numeric string without currency symbols."
     )
 
-    return [
-        types.Content(
-            role="user",
-            parts=[
-                types.Part.from_text(text=prompt),
-                types.Part.from_bytes(data=image_bytes, mime_type="image/png"),
-            ],
-        )
+    parts: List[types.Part] = [
+        types.Part.from_text(text=prompt),
+        types.Part.from_bytes(data=image_bytes, mime_type="image/png"),
     ]
+
+    if context_text:
+        parts.append(
+            types.Part.from_text(
+                text=f"Text located directly beneath this product: {context_text}"
+            )
+        )
+
+    return [types.Content(role="user", parts=parts)]
 
 
 def parse_response_text(text: str) -> Dict[str, Any]:
@@ -152,6 +237,7 @@ def parse_response_text(text: str) -> Dict[str, Any]:
         return {
             "product_name": None,
             "brand": None,
+            "price": None,
             "raw_response": cleaned_text,
         }
 
@@ -181,8 +267,9 @@ async def call_gemini(
     client: genai.Client,
     image_bytes: bytes,
     detection_index: int,
+    context_text: Optional[str],
 ) -> Dict[str, Any]:
-    contents: List[types.Content] = build_contents(image_bytes)
+    contents: List[types.Content] = build_contents(image_bytes, context_text)
 
     generate_content_config = types.GenerateContentConfig(
         thinking_config=types.ThinkingConfig(thinking_budget=0),
@@ -218,6 +305,7 @@ async def call_gemini(
     parsed: Dict[str, Any] = parse_response_text(response_text)
     parsed.setdefault("product_name", None)
     parsed.setdefault("brand", None)
+    parsed.setdefault("price", None)
     parsed["detection_index"] = detection_index
 
     return parsed
@@ -228,6 +316,7 @@ async def process_detections(
     detections: List[Dict[str, Any]],
     gemini_client: genai.Client,
     crops_dir: Path,
+    ocr_words: List[OCRWord],
 ) -> List[Dict[str, Any]]:
     image = cv2.imread(str(image_path))
 
@@ -239,6 +328,7 @@ async def process_detections(
 
     tasks: List[asyncio.Task[Dict[str, Any]]] = []
     crops: Dict[int, bytes] = {}
+    context_by_index: Dict[int, Optional[str]] = {}
 
     for index, detection in enumerate(detections):
         bbox: Optional[Tuple[int, int, int, int]] = detection_to_bbox(
@@ -250,17 +340,26 @@ async def process_detections(
         if bbox is None:
             continue
 
-        crop_bytes: Optional[bytes] = crop_detection(image, bbox)
+        expanded_bbox, context_text = expand_bbox_with_text(
+            bbox,
+            ocr_words,
+            image_width,
+            image_height,
+        )
+
+        crop_bytes: Optional[bytes] = crop_detection(image, expanded_bbox)
         if crop_bytes is None:
             continue
 
         crops[index] = crop_bytes
+        context_by_index[index] = context_text
         tasks.append(
             asyncio.create_task(
                 call_gemini(
                     gemini_client,
                     crop_bytes,
                     index,
+                    context_text,
                 )
             )
         )
@@ -277,6 +376,7 @@ async def process_detections(
                 {
                     "product_name": None,
                     "brand": None,
+                    "price": None,
                     "error": str(result),
                 }
             )
@@ -286,6 +386,7 @@ async def process_detections(
         if isinstance(detection_index, int) and detection_index in crops:
             product_name_raw: Any = result.get("product_name")
             brand_raw: Any = result.get("brand")
+            price_raw: Any = result.get("price")
             product_name: str = sanitize_filename_component(
                 product_name_raw,
                 fallback=f"Product {detection_index}",
@@ -301,6 +402,11 @@ async def process_detections(
             crop_path.write_bytes(crop_bytes)
 
             result["crop_path"] = str(crop_path)
+            result["price"] = price_raw if price_raw is not None else None
+
+            context_text: Optional[str] = context_by_index.get(detection_index)
+            if context_text:
+                result.setdefault("context_text", context_text)
 
         parsed_results.append(result)
 
@@ -312,21 +418,29 @@ async def main(image_path: Path, crops_dir: Path) -> None:
     if not gemini_api_key:
         raise EnvironmentError("GOOGLE_API_KEY environment variable is not set")
 
+    roboflow_api_key: str | None = os.environ.get("ROBOFLOW_API_KEY")
+    if not roboflow_api_key:
+        raise EnvironmentError("ROBOFLOW_API_KEY environment variable is not set")
+
     inference_client = InferenceHTTPClient(
         api_url="https://serverless.roboflow.com",
-        api_key="your_roboflow_api_key",
+        api_key=roboflow_api_key,
     )
 
     gemini_client = genai.Client(api_key=gemini_api_key)
 
     start_time: float = time.perf_counter()
 
-    workflow_result: Any = inference_client.run_workflow(
+    workflow_task: asyncio.Future[Any] = asyncio.to_thread(
+        inference_client.run_workflow,
         workspace_name=ROBOFLOW_WORKSPACE,
         workflow_id=ROBOFLOW_WORKFLOW_ID,
         images={"image": str(image_path)},
         use_cache=True,
     )
+    ocr_task: asyncio.Future[List[OCRWord]] = asyncio.to_thread(load_ocr_words, image_path)
+
+    workflow_result, ocr_words = await asyncio.gather(workflow_task, ocr_task)
 
     detections: List[Dict[str, Any]] = extract_bounding_boxes(workflow_result)
 
@@ -339,6 +453,7 @@ async def main(image_path: Path, crops_dir: Path) -> None:
         detections,
         gemini_client,
         crops_dir,
+        ocr_words,
     )
 
     end_time: float = time.perf_counter()
