@@ -1,10 +1,14 @@
 import argparse
+import os
 import time
 from pathlib import Path
 from typing import Any, Dict, List
 
 import cv2
+from dotenv import load_dotenv
 from inference_sdk import InferenceHTTPClient
+
+load_dotenv()
 
 parser: argparse.ArgumentParser = argparse.ArgumentParser(
     description="Run Roboflow workflow on an input image."
@@ -32,9 +36,14 @@ else:
         f"{input_image_path.stem}_annotated{input_image_path.suffix}"
     )
 
+roboflow_api_key: str | None = os.environ.get("ROBOFLOW_API_KEY")
+
+if roboflow_api_key is None:
+    raise EnvironmentError("ROBOFLOW_API_KEY environment variable is not set")
+
 client = InferenceHTTPClient(
     api_url="https://serverless.roboflow.com",
-    api_key="your_roboflow_api_key"
+    api_key=roboflow_api_key
 )
 
 start_time: float = time.perf_counter()
