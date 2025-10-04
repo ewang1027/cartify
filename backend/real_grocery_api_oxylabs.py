@@ -10,20 +10,19 @@ from flask_cors import CORS
 import os
 from datetime import datetime
 from real_grocery_scorer_oxylabs import RealGroceryScorerOxylabs
-from config import API_KEYS
 
 # Initialize Flask app
 app = Flask(__name__)
 CORS(app)
 
 # Initialize the real grocery scorer with Oxylabs
-# Uses environment variables first, then falls back to config.py
+# Uses environment variables from .env file
 grocery_scorer = RealGroceryScorerOxylabs(
-    usda_api_key=os.getenv('USDA_API_KEY', API_KEYS.get('USDA_API_KEY')),
-    news_api_key=os.getenv('NEWS_API_KEY', API_KEYS.get('NEWS_API_KEY')),
-    gemini_api_key=os.getenv('GEMINI_API_KEY', API_KEYS.get('GEMINI_API_KEY')),
-    oxylabs_username=os.getenv('OXYLABS_USERNAME', API_KEYS.get('OXYLABS_USERNAME')),
-    oxylabs_password=os.getenv('OXYLABS_PASSWORD', API_KEYS.get('OXYLABS_PASSWORD'))
+    usda_api_key=os.getenv('USDA_API_KEY'),
+    news_api_key=os.getenv('NEWS_API_KEY'),
+    gemini_api_key=os.getenv('GEMINI_API_KEY'),
+    oxylabs_username=os.getenv('OXYLABS_USERNAME'),
+    oxylabs_password=os.getenv('OXYLABS_PASSWORD')
 )
 
 print("🛒 Starting Real Grocery Sustainability API (Oxylabs)...")

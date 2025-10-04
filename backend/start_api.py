@@ -6,18 +6,23 @@ This script loads API keys from config.py and starts the API server
 
 import os
 import sys
-from config import API_KEYS
+from load_env import load_environment_variables
 
 def main():
-    """Start the API server with keys from config.py"""
+    """Start the API server with keys from .env file"""
     
     print("🚀 Starting Real Grocery Sustainability API...")
-    print("📋 Loading API keys from config.py...")
+    print("📋 Loading API keys from .env file...")
     
-    # Set environment variables from config
-    for key, value in API_KEYS.items():
-        os.environ[key] = value
-        print(f"   {key}: {'✅ Set' if value else '❌ Missing'}")
+    # Load from .env file
+    env_loaded = load_environment_variables()
+    
+    if env_loaded:
+        print("✅ Environment variables loaded from .env file")
+    else:
+        print("❌ No .env file found! Please create .env file with your API keys.")
+        print("📋 Required keys: OXYLABS_USERNAME, OXYLABS_PASSWORD, GEMINI_API_KEY, NEWS_API_KEY, USDA_API_KEY")
+        sys.exit(1)
     
     print("\n🌱 Starting API server...")
     

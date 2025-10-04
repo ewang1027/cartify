@@ -16,11 +16,7 @@ from nutrition_fetcher import NutritionFetcher
 from sustainability_scorer import SustainabilityScorer
 from google_scrape import scrape_google_shopping_deals
 
-# Import config as fallback for API keys
-try:
-    from config import API_KEYS
-except ImportError:
-    API_KEYS = {}
+# No config fallback needed - using .env file only
 
 
 class RealGroceryScorerOxylabs:
@@ -42,22 +38,12 @@ class RealGroceryScorerOxylabs:
             news_api_key: News API key
             gemini_api_key: Google Gemini API key
         """
-        # Use environment variables first, then fall back to config.py
-        self.oxylabs_username = (oxylabs_username or 
-                                 os.getenv('OXYLABS_USERNAME') or 
-                                 API_KEYS.get('OXYLABS_USERNAME'))
-        self.oxylabs_password = (oxylabs_password or 
-                                 os.getenv('OXYLABS_PASSWORD') or 
-                                 API_KEYS.get('OXYLABS_PASSWORD'))
-        self.usda_api_key = (usda_api_key or 
-                            os.getenv('USDA_API_KEY') or 
-                            API_KEYS.get('USDA_API_KEY', 'DEMO_KEY'))
-        self.news_api_key = (news_api_key or 
-                             os.getenv('NEWS_API_KEY') or 
-                             API_KEYS.get('NEWS_API_KEY'))
-        self.gemini_api_key = (gemini_api_key or 
-                              os.getenv('GEMINI_API_KEY') or 
-                              API_KEYS.get('GEMINI_API_KEY'))
+        # Use environment variables from .env file
+        self.oxylabs_username = oxylabs_username or os.getenv('OXYLABS_USERNAME')
+        self.oxylabs_password = oxylabs_password or os.getenv('OXYLABS_PASSWORD')
+        self.usda_api_key = usda_api_key or os.getenv('USDA_API_KEY')
+        self.news_api_key = news_api_key or os.getenv('NEWS_API_KEY')
+        self.gemini_api_key = gemini_api_key or os.getenv('GEMINI_API_KEY')
         
         # Initialize components with API keys
         self.news_scorer = SimpleNewsScorer(

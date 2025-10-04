@@ -86,10 +86,28 @@ def detection_to_bbox(
         x_center: float = float(detection.get("x", detection.get("left", 0.0)))
         y_center: float = float(detection.get("y", detection.get("top", 0.0)))
 
-        left = int(round(x_center - (width / 2)))
-        top = int(round(y_center - (height / 2)))
-        right = int(round(x_center + (width / 2)))
-        bottom = int(round(y_center + (height / 2)))
+        is_normalized: bool = (
+            0.0 <= x_center <= 1.0
+            and 0.0 <= y_center <= 1.0
+            and 0.0 < width <= 1.0
+            and 0.0 < height <= 1.0
+        )
+
+        if is_normalized:
+            x_center *= float(image_width)
+            y_center *= float(image_height)
+            width *= float(image_width)
+            height *= float(image_height)
+
+        left = int(round(x_center - (width / 2.0)))
+        top = int(round(y_center - (height / 2.0)))
+        right = int(round(x_center + (width / 2.0)))
+        bottom = int(round(y_center + (height / 2.0)))
+
+        if left == right:
+            right = left + 1
+        if top == bottom:
+            bottom = top + 1
 
     left = max(0, min(left, image_width - 1))
     right = max(0, min(right, image_width - 1))
