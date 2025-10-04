@@ -12,3 +12,7 @@ python-doctr[torch]
 pillow
 numpy
 coremltools
+flask
+flask-cors
+flask-socketio
+eventlet
