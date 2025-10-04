@@ -1,8 +1,36 @@
+import argparse
 import time
+from pathlib import Path
 from typing import Any, Dict, List
 
 import cv2
 from inference_sdk import InferenceHTTPClient
+
+parser: argparse.ArgumentParser = argparse.ArgumentParser(
+    description="Run Roboflow workflow on an input image."
+)
+parser.add_argument(
+    "input_path",
+    type=Path,
+    help="Path to the input image file",
+)
+parser.add_argument(
+    "--output-path",
+    dest="output_path",
+    type=Path,
+    help="Optional path for the annotated output image",
+)
+
+args: argparse.Namespace = parser.parse_args()
+
+input_image_path: Path = args.input_path
+output_image_path: Path
+if args.output_path is not None:
+    output_image_path = args.output_path
+else:
+    output_image_path = input_image_path.with_name(
+        f"{input_image_path.stem}_annotated{input_image_path.suffix}"
+    )
 
 client = InferenceHTTPClient(
     api_url="https://serverless.roboflow.com",
@@ -15,7 +43,7 @@ result: Any = client.run_workflow(
     workspace_name="orbifold-ai",
     workflow_id="detect-count-and-visualize-3",
     images={
-        "image": "1642701833484.webp"
+        "image": str(input_image_path)
     },
     use_cache=True # cache workflow definition for 15 minutes
 )
@@ -119,10 +147,7 @@ def draw_bounding_boxes(image_path: str, detections: List[Dict[str, Any]], outpu
 boxes: List[Dict[str, Any]] = extract_bounding_boxes(result)
 
 if boxes:
-    input_image_path: str = "1642701833484.webp"
-    output_image_path: str = "1642701833484_annotated.webp"
-
-    draw_bounding_boxes(input_image_path, boxes, output_image_path)
+    draw_bounding_boxes(str(input_image_path), boxes, str(output_image_path))
 
     print(f"Annotated image saved to: {output_image_path}")
 else:
