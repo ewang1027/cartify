@@ -4,6 +4,10 @@ import sys
 import os
 import re
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Get credentials from environment variables
 USERNAME = os.getenv("OXYLABS_USERNAME")
