@@ -13,45 +13,6 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { fetchSustainabilityComment, playAudioFromBase64 } from "@/utils/audioUtils";
 
-// Mock data for testing
-const MOCK_ITEMS: CartItemType[] = [
-  {
-    id: '1',
-    name: 'Organic Bananas',
-    price: 3.99,
-    image: 'https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=150&h=150&fit=crop',
-    sustainabilityScore: 85
-  },
-  {
-    id: '2',
-    name: 'Local Honey',
-    price: 8.99,
-    image: 'https://images.unsplash.com/photo-1558642452-9d2a7deb7f62?w=150&h=150&fit=crop',
-    sustainabilityScore: 90
-  },
-  {
-    id: '3',
-    name: 'Plastic Water Bottle',
-    price: 1.99,
-    image: 'https://images.unsplash.com/photo-1583394838336-acd977736f90?w=150&h=150&fit=crop',
-    sustainabilityScore: 15
-  },
-  {
-    id: '4',
-    name: 'Fair Trade Coffee',
-    price: 12.99,
-    image: 'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=150&h=150&fit=crop',
-    sustainabilityScore: 75
-  },
-  {
-    id: '5',
-    name: 'Bamboo Toothbrush',
-    price: 4.99,
-    image: 'https://images.unsplash.com/photo-1607619056574-7b8d3ee536b2?w=150&h=150&fit=crop',
-    sustainabilityScore: 95
-  }
-];
-
 const Dashboard = () => {
   const navigate = useNavigate();
   const [items, setItems] = useState<CartItemType[]>([]);
@@ -90,23 +51,6 @@ const Dashboard = () => {
   const handleRemoveItem = (id: string) => {
     setItems(items.filter(item => item.id !== id));
     toast.info("Item removed from cart");
-  };
-
-  const handleAddMockItem = () => {
-    const availableItems = MOCK_ITEMS.filter(
-      mockItem => !items.find(item => item.id === mockItem.id)
-    );
-    
-    if (availableItems.length === 0) {
-      toast.info("All mock items already in cart");
-      return;
-    }
-
-    const randomItem = availableItems[Math.floor(Math.random() * availableItems.length)];
-    setItems([...items, randomItem]);
-    toast.success("Item added to cart", {
-      description: randomItem.name,
-    });
   };
 
   const handleSyncToggle = (checked: boolean) => {
