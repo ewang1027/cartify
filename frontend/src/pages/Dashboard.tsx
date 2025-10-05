@@ -83,6 +83,8 @@ const Dashboard = () => {
   const [totalSpentExternal, setTotalSpentExternal] = useState<number | null>(null);
   const [budget, setBudget] = useState(100);
   const [sustainabilityPreference, setSustainabilityPreference] = useState<'low' | 'medium' | 'high'>('medium');
+  const [sustainabilityEnabled, setSustainabilityEnabled] = useState(true);
+  const [nutritionalValueEnabled, setNutritionalValueEnabled] = useState(true);
   const [showPreferencesDialog, setShowPreferencesDialog] = useState(false);
   const [hasSetPreferences, setHasSetPreferences] = useState(false);
   const [userLocation, setUserLocation] = useState<string>('');
@@ -188,16 +190,24 @@ const Dashboard = () => {
     }
   };
 
-  const handleSavePreferences = async (newBudget: number, newSustainabilityPreference: 'low' | 'medium' | 'high') => {
+  const handleSavePreferences = async (newBudget: number, newSustainabilityPreference: 'low' | 'medium' | 'high', newSustainabilityEnabled: boolean, newNutritionalValueEnabled: boolean) => {
     setBudget(newBudget);
     setSustainabilityPreference(newSustainabilityPreference);
+    setSustainabilityEnabled(newSustainabilityEnabled);
+    setNutritionalValueEnabled(newNutritionalValueEnabled);
     setHasSetPreferences(true);
     
     const preferenceLabel = newSustainabilityPreference === 'high' ? 'Eco Conscious' : 
                            newSustainabilityPreference === 'medium' ? 'Balanced' : 'Budget Focused';
     
+    const enabledFeatures = [];
+    if (newSustainabilityEnabled) enabledFeatures.push('Sustainability');
+    if (newNutritionalValueEnabled) enabledFeatures.push('Nutrition');
+    
+    const featuresText = enabledFeatures.length > 0 ? ` • ${enabledFeatures.join(', ')} enabled` : '';
+    
     toast.success("Preferences updated!", {
-      description: `Budget: $${newBudget} • ${preferenceLabel}`
+      description: `Budget: $${newBudget} • ${preferenceLabel}${featuresText}`
     });
 
     // Play ElevenLabs audio comment

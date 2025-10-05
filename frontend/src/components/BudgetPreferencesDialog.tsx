@@ -5,11 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Card, CardContent } from "@/components/ui/card";
-import { DollarSign, Leaf, Zap, Thermometer } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { DollarSign, Leaf, Zap, Thermometer, Apple } from "lucide-react";
 
 interface BudgetPreferencesDialogProps {
   isOpen: boolean;
-  onSave: (budget: number, sustainabilityLevel: 'low' | 'medium' | 'high') => void;
+  onSave: (budget: number, sustainabilityLevel: 'low' | 'medium' | 'high', sustainabilityEnabled: boolean, nutritionalValueEnabled: boolean) => void;
   onClose: () => void;
 }
 
@@ -37,6 +38,8 @@ const sustainabilityLevels = {
 export const BudgetPreferencesDialog = ({ isOpen, onSave, onClose }: BudgetPreferencesDialogProps) => {
   const [budget, setBudget] = useState(100);
   const [sustainabilityLevel, setSustainabilityLevel] = useState<'low' | 'medium' | 'high'>('medium');
+  const [sustainabilityEnabled, setSustainabilityEnabled] = useState(true);
+  const [nutritionalValueEnabled, setNutritionalValueEnabled] = useState(true);
   const [isValid, setIsValid] = useState(false);
 
   useEffect(() => {
@@ -45,7 +48,7 @@ export const BudgetPreferencesDialog = ({ isOpen, onSave, onClose }: BudgetPrefe
 
   const handleSave = () => {
     if (isValid) {
-      onSave(budget, sustainabilityLevel);
+      onSave(budget, sustainabilityLevel, sustainabilityEnabled, nutritionalValueEnabled);
       onClose();
     }
   };
@@ -97,7 +100,7 @@ export const BudgetPreferencesDialog = ({ isOpen, onSave, onClose }: BudgetPrefe
           </div>
 
           {/* Sustainability Level Selection */}
-          <div className="space-y-3">
+          {/* <div className="space-y-3">
             <Label className="text-sm font-medium">
               Sustainability Preference
             </Label>
@@ -137,6 +140,43 @@ export const BudgetPreferencesDialog = ({ isOpen, onSave, onClose }: BudgetPrefe
                   </Card>
                 );
               })}
+            </div>
+          </div> */}
+
+          {/* Preference Toggles */}
+          <div className="space-y-4">
+            <Label className="text-sm font-medium">
+              Enable Features
+            </Label>
+            
+            {/* Sustainability Toggle */}
+            <div className="flex items-center justify-between p-4 bg-card rounded-lg border border-border">
+              <div className="flex items-center gap-3">
+                <Leaf className="w-5 h-5 text-green-500" />
+                <div>
+                  <h4 className="font-medium text-sm">Sustainability Tracking</h4>
+                  <p className="text-xs text-muted-foreground">Track environmental impact of your purchases</p>
+                </div>
+              </div>
+              <Switch
+                checked={sustainabilityEnabled}
+                onCheckedChange={setSustainabilityEnabled}
+              />
+            </div>
+
+            {/* Nutritional Value Toggle */}
+            <div className="flex items-center justify-between p-4 bg-card rounded-lg border border-border">
+              <div className="flex items-center gap-3">
+                <Apple className="w-5 h-5 text-orange-500" />
+                <div>
+                  <h4 className="font-medium text-sm">Nutritional Value</h4>
+                  <p className="text-xs text-muted-foreground">Get nutrition information for food items</p>
+                </div>
+              </div>
+              <Switch
+                checked={nutritionalValueEnabled}
+                onCheckedChange={setNutritionalValueEnabled}
+              />
             </div>
           </div>
 
