@@ -32,9 +32,10 @@ class SimpleNewsScorer:
             usda_api_key: USDA FoodData Central API key (optional, uses DEMO_KEY as fallback)
             gemini_api_key: Google Gemini API key for AI analysis
         """
-        self.news_api_key = news_api_key or os.getenv('NEWS_API_KEY')
+        self.news_api_key = news_api_key or os.getenv('GNEWS_API_KEY') 
         self.gemini_api_key = gemini_api_key or os.getenv('GEMINI_API_KEY')
-        self.news_base_url = "https://newsapi.org/v2/everything"
+        self.news_base_url = "https://gnews.io/api/v4/search"
+        self.news_api_name = "GNews API"
         self.gemini_api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
         
         # Initialize base sustainability scorer
@@ -83,7 +84,7 @@ class SimpleNewsScorer:
         
         return brand_name
     
-    def search_news(self, brand_name: str, days_back: int = 30) -> List[Dict]:
+    def search_news(self, brand_name: str, days_back: int = 60) -> List[Dict]:
         """
         Search for news articles about a brand.
         
@@ -105,8 +106,8 @@ class SimpleNewsScorer:
             query = f'"{brand_name}" AND (sustainability OR environmental OR "social responsibility" OR ethical OR labor OR "fair trade" OR organic OR "carbon footprint")'
             
             if self.news_api_key:
-                # Use News API
-                print("📰 Using News API for news search...")
+                # Use GNews API
+                print("📰 Using GNews API for news search...")
                 return self._search_news_api(query, start_date, end_date)
             else:
                 # Use Google News RSS
@@ -118,16 +119,16 @@ class SimpleNewsScorer:
             return []
     
     def _search_news_api(self, query: str, start_date: datetime, end_date: datetime) -> List[Dict]:
-        """Search using News API"""
+        """Search using GNews API"""
         try:
             params = {
                 'q': query,
-                'from': start_date.strftime('%Y-%m-%d'),
-                'to': end_date.strftime('%Y-%m-%d'),
-                'sortBy': 'publishedAt',
-                'language': 'en',
-                'pageSize': 10,
-                'apiKey': self.news_api_key
+                'from': start_date.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                'to': end_date.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                'sortby': 'publishedAt',
+                'lang': 'en',
+                'max': 25,
+                'token': self.news_api_key
             }
             
             response = requests.get(self.news_base_url, params=params, timeout=10)
@@ -136,7 +137,7 @@ class SimpleNewsScorer:
             data = response.json()
             articles = data.get('articles', [])
             
-            print(f"📊 Found {len(articles)} articles from News API")
+            print(f"📊 Found {len(articles)} articles from {self.news_api_name}")
             
             # Filter and enhance articles
             filtered_articles = []
@@ -160,7 +161,7 @@ class SimpleNewsScorer:
             return filtered_articles[:5]  # Return top 5 most relevant articles
             
         except Exception as e:
-            print(f"❌ News API error: {e}")
+            print(f"❌ {self.news_api_name} error: {e}")
             return []
     
     def _search_google_news_rss(self, brand_name: str) -> List[Dict]:
@@ -179,7 +180,7 @@ class SimpleNewsScorer:
             
             print(f"📊 Found {len(feed.entries)} articles from Google News RSS")
             
-            for entry in feed.entries[:10]:  # Limit to 10 articles
+            for entry in feed.entries[:25]:  # Limit to 25 articles
                 article = {
                     'title': entry.get('title', ''),
                     'description': entry.get('summary', ''),
@@ -652,12 +653,12 @@ class SimpleNewsScorer:
         )
         
         # Step 8: Combine scores with dynamic carbon and ethics scores
-        # Weight: Nutrition (40%), Carbon (25%), Social Ethics (25%), News (10%)
+        # Weight: Nutrition (35%), Carbon (25%), Social Ethics (20%), News (20%)
         final_score = (
-            base_score.breakdown["nutrition_score"] * 0.40 +
+            base_score.breakdown["nutrition_score"] * 0.35 +
             carbon_score * 0.25 +
-            ethics_score * 0.25 +
-            news_score * 0.10
+            ethics_score * 0.20 +
+            news_score * 0.20
         )
         
         # Step 9: Generate enhanced justification
