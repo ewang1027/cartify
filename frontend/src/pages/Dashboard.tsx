@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Plus, Radio } from "lucide-react";
+import { Radio } from "lucide-react";
 import { TopNavigation } from "@/components/TopNavigation";
 import { BudgetCard } from "@/components/BudgetCard";
 import { SustainabilityCard } from "@/components/SustainabilityCard";
@@ -15,12 +15,71 @@ import { toast } from "sonner";
 import { fetchSustainabilityComment, playAudioFromBase64 } from "@/utils/audioUtils";
 import { getCurrentLocation, formatLocation } from "@/utils/locationUtils";
 
+type BackendCartItem = {
+  name?: string;
+  price?: number | string | null;
+  image_url?: string | null;
+  image_path?: string | null;
+  sustainabilityScore?: number | null;
+};
+
+type ShoppingCartResponse = {
+  shopping_cart?: Record<string, BackendCartItem>;
+  cart_summary?: {
+    total_price?: number;
+  };
+};
+
+const API_BASE_URL = (import.meta.env.VITE_BACKEND_URL as string | undefined) ?? "http://localhost:8000";
+const CART_ENDPOINT = "/shopping-cart/with-urls";
+const PLACEHOLDER_IMAGE = "/placeholder.svg";
+
+const normalizePath = (path: string): string => (path.startsWith("/") ? path : `/${path}`);
+
+const buildImageUrl = (item: BackendCartItem): string => {
+  if (item.image_url) {
+    return `${API_BASE_URL}${normalizePath(item.image_url)}`;
+  }
+
+  if (item.image_path) {
+    if (item.image_path.startsWith("http")) {
+      return item.image_path;
+    }
+    return `${API_BASE_URL}${normalizePath(item.image_path)}`;
+  }
+
+  return PLACEHOLDER_IMAGE;
+};
+
+const parsePrice = (value: BackendCartItem["price"]): number => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const sanitized = value.replace(/[^0-9.]/g, "");
+    const numeric = Number.parseFloat(sanitized);
+    if (Number.isFinite(numeric)) {
+      return numeric;
+    }
+  }
+
+  return 0;
+};
+
+const deriveSustainabilityScore = (value: BackendCartItem["sustainabilityScore"]): number => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.min(100, Math.max(0, Math.round(value)));
+  }
+
+  return 75;
+};
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [items, setItems] = useState<CartItemType[]>([]);
   const [syncEnabled, setSyncEnabled] = useState(false);
-  const [isPolling, setIsPolling] = useState(true);
   const [totalSpentExternal, setTotalSpentExternal] = useState<number | null>(null);
   const [budget, setBudget] = useState(100);
   const [sustainabilityPreference, setSustainabilityPreference] = useState<'low' | 'medium' | 'high'>('medium');
@@ -34,6 +93,44 @@ const Dashboard = () => {
   const avgSustainability = items.length > 0
     ? Math.round(items.reduce((sum, item) => sum + item.sustainabilityScore, 0) / items.length)
     : 0;
+
+  const fetchCartData = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}${CART_ENDPOINT}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch cart: ${response.status}`);
+      }
+
+      const data: ShoppingCartResponse = await response.json();
+      const shoppingCart = data.shopping_cart ?? {};
+      const cartItems: CartItemType[] = Object.entries(shoppingCart).map(([id, item]) => ({
+        id,
+        name: item.name ?? "Unknown item",
+        price: parsePrice(item.price),
+        image: buildImageUrl(item),
+        sustainabilityScore: deriveSustainabilityScore(item.sustainabilityScore),
+      }));
+
+      setItems(cartItems);
+
+      if (data.cart_summary && typeof data.cart_summary.total_price === "number") {
+        setTotalSpentExternal(data.cart_summary.total_price);
+      } else {
+        setTotalSpentExternal(null);
+      }
+    } catch (error) {
+      console.error("Error fetching cart data:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCartData();
+    const intervalId = window.setInterval(fetchCartData, 2000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [fetchCartData]);
 
   useEffect(() => {
     if (totalSpent > budget) {
