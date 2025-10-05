@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Leaflet map custom styles */
+.custom-marker {
+  background: none !important;
+  border: none !important;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.1);
+  }
+}
+
 /* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
 All colors MUST be HSL.
 */

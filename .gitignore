@@ -74,3 +74,7 @@ Thumbs.db
 
 # JSON output files (optional - remove if you want to track them)
 *.json
+
+*.jpg
+*.png
+*.jpeg

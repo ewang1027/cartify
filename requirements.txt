@@ -26,4 +26,5 @@ coremltools
 flask
 flask-cors
 flask-socketio
-eventlet
+eventletrequests
+elevenlabs

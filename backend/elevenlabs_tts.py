@@ -85,6 +85,7 @@ class ElevenLabsTTS:
                 "error": str(e),
                 "comment": self.generate_sustainability_comment(preference)
             }
+    
 
 # Initialize the TTS service
 tts_service = ElevenLabsTTS()

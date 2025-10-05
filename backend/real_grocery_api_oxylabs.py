@@ -10,6 +10,8 @@ from flask_cors import CORS
 import os
 from datetime import datetime
 from real_grocery_scorer_oxylabs import RealGroceryScorerOxylabs
+from ray_ban_integration import RayBanAPI
+from ray_ban_routes import create_ray_ban_routes
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -25,6 +27,9 @@ grocery_scorer = RealGroceryScorerOxylabs(
     oxylabs_password=os.getenv('OXYLABS_PASSWORD')
 )
 
+# Initialize Ray-Bans integration
+ray_ban_api = RayBanAPI(os.getenv('ELEVENLABS_API_KEY'))
+
 print("🛒 Starting Real Grocery Sustainability API (Oxylabs)...")
 print("Available endpoints:")
 print("  GET  /health - Health check")
@@ -32,11 +37,19 @@ print("  POST /grocery/search - Search for grocery products")
 print("  POST /grocery/analyze - Analyze single grocery product")
 print("  POST /grocery/category - Analyze grocery category")
 print("  POST /grocery/report - Generate comprehensive report")
+print("  POST /ray-ban/start-stream - Start live streaming session")
+print("  POST /ray-ban/stop-stream - Stop live streaming session")
+print("  POST /ray-ban/analyze-product - Analyze product in real-time")
+print("  POST /ray-ban/quick-alert - Generate quick TTS alert")
+print("  GET  /ray-ban/status - Get streaming status")
 print("Features:")
 print("  - Real Google Shopping product data via Oxylabs")
 print("  - USDA nutrition data integration")
 print("  - News-based sustainability analysis")
 print("  - Comprehensive grocery category insights")
+print("  - Meta Ray-Bans live streaming integration")
+print("  - ElevenLabs text-to-speech announcements")
+print("  - Real-time price comparisons")
 
 
 @app.route('/health', methods=['GET'])
@@ -236,6 +249,9 @@ def quick_test():
             "timestamp": datetime.now().isoformat()
         }), 500
 
+
+# Add Ray-Bans routes
+create_ray_ban_routes(app, ray_ban_api)
 
 if __name__ == '__main__':
     # Run the Flask app

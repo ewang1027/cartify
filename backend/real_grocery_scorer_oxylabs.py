@@ -42,7 +42,7 @@ class RealGroceryScorerOxylabs:
         self.oxylabs_username = oxylabs_username or os.getenv('OXYLABS_USERNAME')
         self.oxylabs_password = oxylabs_password or os.getenv('OXYLABS_PASSWORD')
         self.usda_api_key = usda_api_key or os.getenv('USDA_API_KEY')
-        self.news_api_key = news_api_key or os.getenv('NEWS_API_KEY')
+        self.news_api_key = news_api_key or os.getenv('GNEWS_API_KEY') or os.getenv('NEWS_API_KEY')
         self.gemini_api_key = gemini_api_key or os.getenv('GEMINI_API_KEY')
         
         # Initialize components with API keys
