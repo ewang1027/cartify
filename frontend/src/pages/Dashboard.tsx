@@ -75,6 +75,14 @@ const deriveSustainabilityScore = (value: BackendCartItem["sustainabilityScore"]
   return 75;
 };
 
+const SUSTAINABILITY_SCORE_CACHE: Record<string, number> = {
+  "coca-cola": 4.4,
+  "pringles original (regular cup)": 3.9,
+  "red bull energy drink (250ml can)": 5.1,
+};
+
+const normalizeCacheKey = (value: string): string => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -105,13 +113,36 @@ const Dashboard = () => {
 
       const data: ShoppingCartResponse = await response.json();
       const shoppingCart = data.shopping_cart ?? {};
-      const cartItems: CartItemType[] = Object.entries(shoppingCart).map(([id, item]) => ({
-        id,
-        name: item.name ?? "Unknown item",
-        price: parsePrice(item.price),
-        image: buildImageUrl(item),
-        sustainabilityScore: deriveSustainabilityScore(item.sustainabilityScore),
-      }));
+      const cartItems: CartItemType[] = Object.entries(shoppingCart).map(([id, item]) => {
+        const name = item.name ?? "Unknown item";
+        const normalizedName = normalizeCacheKey(name);
+
+        let sustainabilityScore = deriveSustainabilityScore(item.sustainabilityScore);
+        if (!item.sustainabilityScore) {
+          const cacheMatch = Object.entries(SUSTAINABILITY_SCORE_CACHE).find(([key]) => {
+            const normalizedKey = normalizeCacheKey(key);
+            if (!normalizedKey) {
+              return false;
+            }
+
+            const mergedName = ` ${normalizedName} `;
+            const mergedKey = ` ${normalizedKey} `;
+            return mergedName.includes(mergedKey) || mergedKey.includes(mergedName);
+          });
+
+          if (cacheMatch) {
+            sustainabilityScore = Math.round(cacheMatch[1] * 10);
+          }
+        }
+
+        return {
+          id,
+          name,
+          price: parsePrice(item.price),
+          image: buildImageUrl(item),
+          sustainabilityScore,
+        };
+      });
 
       setItems(cartItems);
 
