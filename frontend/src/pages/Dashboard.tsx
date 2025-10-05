@@ -7,7 +7,7 @@ import { SustainabilityCard } from "@/components/SustainabilityCard";
 import { CartItem, CartItemType } from "@/components/CartItem";
 import { GlassesVideoFeed } from "@/components/GlassesVideoFeed";
 import { BudgetPreferencesDialog } from "@/components/BudgetPreferencesDialog";
-import { SustainabilityMap } from "@/components/SustainabilityMap";
+// import { SustainabilityMap } from "@/components/SustainabilityMap";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -306,7 +306,7 @@ const Dashboard = () => {
             </div>
 
             {/* Sustainability Map */}
-            <SustainabilityMap currentSustainabilityScore={avgSustainability} />
+            {/* <SustainabilityMap currentSustainabilityScore={avgSustainability} /> */}
           </div>
         </div>
       </main>
