@@ -370,6 +370,7 @@ class CenterObjectClassifier:
         
         # Smart cache lookup: check if item contains keywords for pre-cached items
         cached_analysis = None
+        cached_price: Optional[float] = None
         cache_matched_key = None
         
         # Keywords for pre-cached items
@@ -388,6 +389,7 @@ class CenterObjectClassifier:
                 "best_deal_message": "It looks like the best deal for the Pringles Cheddar Cheese chips is $1.75 at Dollar General!",
                 "alternative_message": "If you're open to a slight variation, the Pringles Cheddar & Sour Cream Potato Crisps are on sale for $2.19 at Target, which is a really popular flavor too."
             }
+            cached_price = 1.75
             cache_matched_key = "pringles_products"
         
         # Check if this is a Coca-Cola/Coke product
@@ -398,6 +400,7 @@ class CenterObjectClassifier:
                 "best_deal_message": "It looks like the best deal for a single can of Coca Cola Original is $1.35 at Dollar General!",
                 "alternative_message": "If you're open to trying something different, FANTA ORANGE SODA is on sale for $6.69 at Walgreens, which is a fun fruity option."
             }
+            cached_price = 1.35
             cache_matched_key = "coca_cola_products"
         
         # Use cached analysis if found
@@ -408,9 +411,12 @@ class CenterObjectClassifier:
             # Update the cart item with cached analysis
             if item_key in self.cart:
                 self.cart[item_key]['deal_analysis'] = cached_analysis
-                extracted_price = self.extract_best_deal_price(cached_analysis.get('best_deal_message'))
-                if extracted_price is not None:
-                    self.cart[item_key]['price'] = extracted_price
+                if cached_price is not None:
+                    self.cart[item_key]['price'] = cached_price
+                else:
+                    extracted_price = self.extract_best_deal_price(cached_analysis.get('best_deal_message'))
+                    if extracted_price is not None:
+                        self.cart[item_key]['price'] = extracted_price
                 await self.schedule_cart_flush()
             
             # Print the cached analysis summary (with item_key to prevent re-speaking)
