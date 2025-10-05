@@ -129,14 +129,21 @@ GEMINI_PROMPT = (
 )
 
 CART_CHECK_PROMPT = (
-    "You are helping to manage a shopping cart. I will provide you with: "
-    "1. A new item that was just detected: {new_item}"
-    "2. The current shopping cart contents: {cart_contents}"
-    "3. The timestamp when each item was added: {timestamps}"
-    "4. Current time: {current_time}"
+    "You are helping to manage a shopping cart. I will provide you with:\n"
+    "1. A new item that was just detected: {new_item}\n"
+    "2. The current shopping cart contents: {cart_contents}\n"
+    "3. The timestamp when each item was added: {timestamps}\n"
+    "4. Current time: {current_time}\n\n"
     "Please determine if the new item is the same as or very similar to any item in the cart that was added within the last 10 seconds. "
-    "Consider items similar if they are the same product (e.g., 'Diet Coke can' and 'Diet Coke' are the same, 'Pringles can' and 'Pringles Original Potato Crisps' are similar). "
-    "Respond with a JSON object: {\"is_duplicate\": true/false, \"similar_item\": \"item_name\", \"time_diff\": seconds, \"reason\": \"explanation\"}"
+    "Consider items similar if they are the same product (e.g., 'Diet Coke can' and 'Diet Coke' are the same, 'Pringles can' and 'Pringles Original Potato Crisps' are similar).\n\n"
+    "Respond ONLY with a valid JSON object (no markdown, no code blocks, no extra text):\n"
+    "{{\n"
+    '  "is_duplicate": true,\n'
+    '  "similar_item": "item name if duplicate, empty string otherwise",\n'
+    '  "time_diff": 0,\n'
+    '  "reason": "brief explanation"\n'
+    "}}\n"
+    "Make sure the JSON is valid and parseable."
 )
 
 DEAL_ANALYSIS_PROMPT = (
@@ -199,8 +206,10 @@ class CenterObjectClassifier:
         self.deal_analysis_cache = {}  # Cache deal analysis by product name {item_key: deal_analysis}
         self.spoken_items = set()  # Track which items have been spoken already
         self.window_shown = False  # Track if CV2 window has been displayed
+        self.window_shown_time = 0  # Track when window was first shown for delayed speech
         self.pending_speech = []  # Queue for speech that needs to wait for window
         self.current_audio_process = None  # Track current playing audio to allow interruption
+        self.background_tasks = set()  # Track background deal analysis tasks
         
         # Create captures directory
         self.captures_dir.mkdir(exist_ok=True)
@@ -726,12 +735,25 @@ class CenterObjectClassifier:
             try:
                 # Try to find JSON in the response
                 import re
-                json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+                
+                # Clean up response text - remove markdown code blocks if present
+                cleaned_text = response_text.strip()
+                if cleaned_text.startswith('```'):
+                    # Remove markdown code blocks
+                    cleaned_text = re.sub(r'^```(?:json)?\s*\n?', '', cleaned_text)
+                    cleaned_text = re.sub(r'\n?```\s*$', '', cleaned_text)
+                
+                json_match = re.search(r'\{.*\}', cleaned_text, re.DOTALL)
                 if json_match:
                     json_str = json_match.group()
                     result = json.loads(json_str)
                 else:
-                    result = json.loads(response_text)
+                    result = json.loads(cleaned_text)
+                
+                # Validate that result is a dictionary with expected keys
+                if not isinstance(result, dict):
+                    print(f"⚠️ LLM returned non-dict result: {type(result)}")
+                    return False
                 
                 is_duplicate = result.get('is_duplicate', False)
                 similar_item = result.get('similar_item', '')
@@ -739,13 +761,13 @@ class CenterObjectClassifier:
                 reason = result.get('reason', '')
                 
                 if is_duplicate:
-                    print(f"🤖 LLM detected duplicate: {object_name} similar to {similar_item} (added {time_diff:.1f}s ago) - {reason}")
+                    print(f"🔄 Skipping duplicate item: {object_name} (similar to {similar_item})")
                 
                 return is_duplicate
                 
-            except (json.JSONDecodeError, AttributeError) as e:
-                print(f"⚠️ Could not parse LLM cart check response: {response_text[:100]}...")
-                print(f"   Error: {e}")
+            except (json.JSONDecodeError, AttributeError, KeyError) as e:
+                print(f"⚠️ Could not parse LLM cart check response: {response_text[:200]}...")
+                print(f"   Parse error: {type(e).__name__}: {e}")
                 return False
                 
         except Exception as e:
@@ -1374,7 +1396,7 @@ class CenterObjectClassifier:
                             self.last_classification_result = classification
                             
                             if classification:
-                                # Perform deal analysis for non-duplicate classifications
+                                # Schedule deal analysis in background BEFORE updating cart
                                 object_name = classification.get('object_name', 'Unknown')
                                 brand = classification.get('brand', 'Unknown')
                                 category = classification.get('category', 'Unknown')
@@ -1388,11 +1410,24 @@ class CenterObjectClassifier:
                                     # Create item key for tracking
                                     item_key = f"{object_name}_{self.normalize_brand_name(brand)}".lower()
                                     
-                                    # Perform deal analysis if this is a new classification (not a duplicate)
-                                    if not self.is_duplicate_item(object_name, brand):
-                                        await self.perform_deal_analysis(object_name, brand, category, item_key)
+                                    # Use LLM to check if this is a duplicate (more accurate than string matching)
+                                    is_duplicate_llm = await self.check_cart_duplicate_with_llm(object_name, brand, category, current_time)
+                                    
+                                    # Also check simple duplicate as fallback
+                                    is_duplicate_simple = self.is_duplicate_item(object_name, brand)
+                                    
+                                    # Perform deal analysis in background only if BOTH checks say it's not a duplicate
+                                    if not is_duplicate_llm and not is_duplicate_simple:
+                                        # Create background task for deal analysis
+                                        task = asyncio.create_task(
+                                            self.perform_deal_analysis(object_name, brand, category, item_key)
+                                        )
+                                        self.background_tasks.add(task)
+                                        task.add_done_callback(self.background_tasks.discard)
+                                    elif is_duplicate_llm or is_duplicate_simple:
+                                        print(f"⏭️  Skipping deal analysis for duplicate: {object_name}")
                                 
-                                # Update cart immediately (no cooldown for cart updates)
+                                # Update cart immediately (after checking for deal analysis)
                                 await self.update_cart(classification)
                             else:
                                 print("❌ Classification failed")
@@ -1410,9 +1445,12 @@ class CenterObjectClassifier:
                     window_shown = True
                     # Store in instance variable so TTS knows window is ready
                     self.window_shown = True
-                    
-                    # Play any queued speech now that window is visible (non-blocking)
-                    if self.pending_speech:
+                    # Store the time when window was first shown
+                    self.window_shown_time = current_time
+                
+                # Play queued speech after a short delay (2 seconds after window shown)
+                if self.window_shown and self.pending_speech:
+                    if current_time - self.window_shown_time >= 2.0:  # 2 second delay
                         print(f"🔊 Playing {len(self.pending_speech)} queued speech items...")
                         for speech_text, speech_item_key in self.pending_speech:
                             # Check if already spoken (it should be marked already)
@@ -1440,6 +1478,11 @@ class CenterObjectClassifier:
         except KeyboardInterrupt:
             print("\nInterrupted by user")
         finally:
+            # Wait for any pending background tasks to complete
+            if self.background_tasks:
+                print(f"⏳ Waiting for {len(self.background_tasks)} background tasks to complete...")
+                await asyncio.gather(*self.background_tasks, return_exceptions=True)
+            
             cap.release()
             cv2.destroyAllWindows()
             print("Camera released and windows closed")
