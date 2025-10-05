@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { fetchSustainabilityComment, playAudioFromBase64 } from "@/utils/audioUtils";
 
 // Mock data for testing
 const MOCK_ITEMS: CartItemType[] = [
@@ -119,14 +120,35 @@ const Dashboard = () => {
     }
   };
 
-  const handleSavePreferences = (newBudget: number, newSustainabilityPreference: 'low' | 'medium' | 'high') => {
+  const handleSavePreferences = async (newBudget: number, newSustainabilityPreference: 'low' | 'medium' | 'high') => {
     setBudget(newBudget);
     setSustainabilityPreference(newSustainabilityPreference);
     setHasSetPreferences(true);
     
+    const preferenceLabel = newSustainabilityPreference === 'high' ? 'Eco Conscious' : 
+                           newSustainabilityPreference === 'medium' ? 'Balanced' : 'Budget Focused';
+    
     toast.success("Preferences updated!", {
-      description: `Budget: $${newBudget} • ${newSustainabilityPreference === 'high' ? 'Eco Conscious' : newSustainabilityPreference === 'medium' ? 'Balanced' : 'Budget Focused'}`
+      description: `Budget: $${newBudget} • ${preferenceLabel}`
     });
+
+    // Play ElevenLabs audio comment
+    try {
+      const audioData = await fetchSustainabilityComment(newSustainabilityPreference);
+      
+      if (audioData.success && audioData.audio) {
+        await playAudioFromBase64(audioData.audio);
+      } else {
+        // Fallback: show the comment as text if audio fails
+        console.log("Audio generation failed, showing text comment:", audioData.comment);
+        toast.info("Great choice!", {
+          description: audioData.comment
+        });
+      }
+    } catch (error) {
+      console.error("Error playing audio comment:", error);
+      // Silently fail - don't interrupt the user experience
+    }
   };
 
   const handleClosePreferencesDialog = () => {

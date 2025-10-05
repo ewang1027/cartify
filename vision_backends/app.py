@@ -9,6 +9,11 @@ import os
 import subprocess
 import tempfile
 import numpy as np
+import sys
+
+# Add backend directory to path to import elevenlabs_tts
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'backend'))
+from elevenlabs_tts import create_tts_endpoints
 
 app = Flask(__name__)
 CORS(app)
@@ -111,6 +116,9 @@ def handle_stop_stream():
 @app.route('/health')
 def health_check():
     return {'status': 'healthy', 'camera_active': streaming}
+
+# Add ElevenLabs TTS endpoints
+create_tts_endpoints(app)
 
 if __name__ == '__main__':
     print(f"Starting video streaming server...")

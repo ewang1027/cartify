@@ -2,8 +2,8 @@
 flask
 flask-cors
 requests
-feedparser
 python-dotenv
+feedparser
 google-generativeai
 beautifulsoup4
 lxml
