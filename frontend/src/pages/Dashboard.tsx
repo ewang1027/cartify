@@ -79,11 +79,11 @@ const Dashboard = () => {
   const handleSyncToggle = (checked: boolean) => {
     setSyncEnabled(checked);
     if (checked) {
-      toast.info("Glasses sync enabled", {
-        description: "Now looking for grocery products...",
+      toast.info("Glasses camera enabled", {
+        description: "Camera access requested for glasses view...",
       });
     } else {
-      toast.info("Glasses sync disabled");
+      toast.info("Glasses camera disabled");
     }
   };
 
@@ -157,7 +157,7 @@ const Dashboard = () => {
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2 px-4 py-2 bg-card rounded-lg border border-border">
                   <Radio className={`w-4 h-4 ${syncEnabled ? 'text-success animate-pulse' : 'text-muted-foreground'}`} />
-                  <Label htmlFor="sync" className="text-sm font-medium">Sync with Glasses</Label>
+                  <Label htmlFor="sync" className="text-sm font-medium">Glasses Camera</Label>
                   <Switch
                     id="sync"
                     checked={syncEnabled}
@@ -186,7 +186,7 @@ const Dashboard = () => {
                 <div className="text-center py-16 bg-card rounded-lg border border-dashed border-border">
                   <p className="text-muted-foreground text-lg mb-4">Your cart is empty</p>
                   <p className="text-sm text-muted-foreground mb-6">
-                    Add items using the button above or enable glasses sync
+                    Add items using the button above or enable glasses camera
                   </p>
                   <Button
                     variant="outline"
