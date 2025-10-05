@@ -385,7 +385,7 @@ class CenterObjectClassifier:
             print(f"💾 ✅ CACHE HIT! Detected Pringles product: {object_name}")
             cached_analysis = {
                 "best_deal_message": "It looks like the best deal for the Pringles Cheddar Cheese chips is $1.75 at Dollar General!",
-                "alternative_message": "If you're open to a slight variation, the Pringles Cheddar & Sour Cream Potato Crisps are on sale for $2.19 at Target, which is a really popular flavor too."
+                "alternative_message": "If you're open to a slight variation, the Pringles Cheddar & Sour Cream Potato Crisps are on sale for $2.19 at Target, which is a really popular flavor too. As for the sustainability side of things, Pringles face sustainability challenges due to their non-recyclable mixed-material packaging and use of processed ingredients, though the brand has made limited efforts toward more recyclable can designs."
             }
             cached_price = 1.75
             cache_matched_key = "pringles_products"
@@ -396,7 +396,7 @@ class CenterObjectClassifier:
             print(f"💾 ✅ CACHE HIT! Detected Coca-Cola/Coke product: {object_name}")
             cached_analysis = {
                 "best_deal_message": "It looks like the best deal for a single can of Coca Cola Original is $1.35 at Dollar General!",
-                "alternative_message": "If you're open to trying something different, FANTA ORANGE SODA is on sale for $6.69 at Walgreens, which is a fun fruity option."
+                "alternative_message": "If you're open to trying something different, FANTA ORANGE SODA is on sale for $6.69 at Walgreens, which is a fun fruity option. As for the Nutritonal Side of things it is important to note that, recent research on Coca-Cola suggests it may disrupt the gut microbiome and be linked to depression, with one study proposing a “molecular addiction” in the intestines driven by high sugar intake."
             }
             cached_price = 1.35
             cache_matched_key = "coca_cola_products"
