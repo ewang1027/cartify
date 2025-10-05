@@ -1,65 +1,30 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Plus, Radio } from "lucide-react";
-import { Navbar } from "@/components/Navbar";
+import { TopNavigation } from "@/components/TopNavigation";
 import { BudgetCard } from "@/components/BudgetCard";
 import { SustainabilityCard } from "@/components/SustainabilityCard";
 import { CartItem, CartItemType } from "@/components/CartItem";
 import { GlassesVideoFeed } from "@/components/GlassesVideoFeed";
 import { BudgetPreferencesDialog } from "@/components/BudgetPreferencesDialog";
+import { SustainabilityMap } from "@/components/SustainabilityMap";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { fetchSustainabilityComment, playAudioFromBase64 } from "@/utils/audioUtils";
-
-// Mock data for testing
-const MOCK_ITEMS: CartItemType[] = [
-  {
-    id: '1',
-    name: 'Organic Bananas',
-    price: 3.99,
-    image: 'https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=150&h=150&fit=crop',
-    sustainabilityScore: 85
-  },
-  {
-    id: '2',
-    name: 'Local Honey',
-    price: 8.99,
-    image: 'https://images.unsplash.com/photo-1558642452-9d2a7deb7f62?w=150&h=150&fit=crop',
-    sustainabilityScore: 90
-  },
-  {
-    id: '3',
-    name: 'Plastic Water Bottle',
-    price: 1.99,
-    image: 'https://images.unsplash.com/photo-1583394838336-acd977736f90?w=150&h=150&fit=crop',
-    sustainabilityScore: 15
-  },
-  {
-    id: '4',
-    name: 'Fair Trade Coffee',
-    price: 12.99,
-    image: 'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=150&h=150&fit=crop',
-    sustainabilityScore: 75
-  },
-  {
-    id: '5',
-    name: 'Bamboo Toothbrush',
-    price: 4.99,
-    image: 'https://images.unsplash.com/photo-1607619056574-7b8d3ee536b2?w=150&h=150&fit=crop',
-    sustainabilityScore: 95
-  }
-];
+import { getCurrentLocation, formatLocation, LocationData } from "@/utils/locationUtils";
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [items, setItems] = useState<CartItemType[]>([]);
   const [syncEnabled, setSyncEnabled] = useState(false);
   const [budget, setBudget] = useState(100);
   const [sustainabilityPreference, setSustainabilityPreference] = useState<'low' | 'medium' | 'high'>('medium');
   const [showPreferencesDialog, setShowPreferencesDialog] = useState(false);
   const [hasSetPreferences, setHasSetPreferences] = useState(false);
+  const [userLocation, setUserLocation] = useState<string>('');
 
   const totalSpent = items.reduce((sum, item) => sum + item.price, 0);
   const avgSustainability = items.length > 0
@@ -82,31 +47,33 @@ const Dashboard = () => {
     }
   }, [avgSustainability, items.length]);
 
-  // Show preferences dialog every time user enters dashboard
+  // Show preferences dialog only when coming from home page, not from Analytics
   useEffect(() => {
-    setShowPreferencesDialog(true);
+    const isComingFromAnalytics = location.state?.from === 'analytics';
+    if (!isComingFromAnalytics) {
+      setShowPreferencesDialog(true);
+    }
+  }, [location.state]);
+
+  // Fetch user location on component mount
+  useEffect(() => {
+    const fetchLocation = async () => {
+      try {
+        const locationData = await getCurrentLocation();
+        const formattedLocation = formatLocation(locationData);
+        setUserLocation(formattedLocation);
+      } catch (error) {
+        console.error('Error fetching location:', error);
+        setUserLocation('Location unavailable');
+      }
+    };
+
+    fetchLocation();
   }, []);
 
   const handleRemoveItem = (id: string) => {
     setItems(items.filter(item => item.id !== id));
     toast.info("Item removed from cart");
-  };
-
-  const handleAddMockItem = () => {
-    const availableItems = MOCK_ITEMS.filter(
-      mockItem => !items.find(item => item.id === mockItem.id)
-    );
-    
-    if (availableItems.length === 0) {
-      toast.info("All mock items already in cart");
-      return;
-    }
-
-    const randomItem = availableItems[Math.floor(Math.random() * availableItems.length)];
-    setItems([...items, randomItem]);
-    toast.success("Item added to cart", {
-      description: randomItem.name,
-    });
   };
 
   const handleSyncToggle = (checked: boolean) => {
@@ -161,7 +128,7 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar username="Manoj" budget={budget} />
+      <TopNavigation username="Manoj" budget={budget} location={userLocation} />
       
       {/* Preferences Dialog */}
       <BudgetPreferencesDialog
@@ -236,6 +203,9 @@ const Dashboard = () => {
                 </div>
               )}
             </div>
+
+            {/* Sustainability Map */}
+            <SustainabilityMap currentSustainabilityScore={avgSustainability} />
           </div>
         </div>
       </main>

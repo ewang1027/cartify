@@ -3,9 +3,10 @@ import { ShoppingCart } from "lucide-react";
 interface NavbarProps {
   username?: string;
   budget?: number;
+  location?: string;
 }
 
-export const Navbar = ({ username = "Guest", budget = 0 }: NavbarProps) => {
+export const Navbar = ({ username = "Guest", budget = 0, location }: NavbarProps) => {
   return (
     <nav className="bg-card border-b border-border px-6 py-4 shadow-sm">
       <div className="container mx-auto flex items-center justify-between">
@@ -25,7 +26,12 @@ export const Navbar = ({ username = "Guest", budget = 0 }: NavbarProps) => {
             <div className="w-10 h-10 rounded-full bg-gradient-hero flex items-center justify-center text-primary-foreground font-semibold">
               {username.charAt(0).toUpperCase()}
             </div>
-            <span className="text-sm font-medium text-foreground">{username}</span>
+            <div className="text-right">
+              <span className="text-sm font-medium text-foreground block">{username}</span>
+              {location && (
+                <span className="text-xs text-muted-foreground">{location}</span>
+              )}
+            </div>
           </div>
         </div>
       </div>
