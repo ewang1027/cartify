@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { BarChart3, LayoutDashboard } from "lucide-react";
+import { BarChart3, LayoutDashboard, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface TopNavigationProps {
@@ -32,7 +32,7 @@ export const TopNavigation = ({ username = "Guest", budget = 0, location }: TopN
           {/* Logo */}
           <div className="flex items-center gap-3">
             <div className="p-2 bg-gradient-hero rounded-lg">
-              <LayoutDashboard className="w-6 h-6 text-primary-foreground" />
+              <ShoppingCart className="w-6 h-6 text-primary-foreground" />
             </div>
             <span className="text-xl font-semibold text-foreground">Cartify</span>
           </div>
