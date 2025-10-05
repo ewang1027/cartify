@@ -1335,6 +1335,7 @@ class CenterObjectClassifier:
                     break
                 
                 self.frame_count += 1
+                current_time = time.time()  # Define current_time at the start of the loop
                 
                 # Process frame
                 detection_data = await self.process_frame(frame)
@@ -1348,8 +1349,6 @@ class CenterObjectClassifier:
                     
                     # Process detection
                     if image_path and gemini_available:
-                        current_time = time.time()
-                        
                         # Always print detection info
                         print(f"🔍 Object detected: {best_object['label']} (source: {best_object.get('source', 'unknown')}) - Frame {self.frame_count}")
                         
@@ -1501,16 +1500,20 @@ async def main():
     video_source = None
     enable_tts = False
     
-    if len(sys.argv) > 1:
-        video_source = sys.argv[1]
-        print(f"Using video source: {video_source}")
-    else:
-        print("No video file specified, using camera")
-    
-    # Check for TTS flag
+    # Check for TTS flag first
     if '--tts' in sys.argv or '--speak' in sys.argv:
         enable_tts = True
         print("🔊 Text-to-speech mode enabled")
+    
+    # Get video source (ignore flags)
+    for arg in sys.argv[1:]:
+        if not arg.startswith('--'):
+            video_source = arg
+            print(f"Using video source: {video_source}")
+            break
+    
+    if video_source is None:
+        print("No video file specified, using camera")
     
     classifier = CenterObjectClassifier(enable_tts=enable_tts)
     await classifier.run(video_source)
