@@ -52,6 +52,15 @@ CAPTURES_DIR = Path("captures")
 GEMINI_MODEL = "gemini-flash-lite-latest"  # Model to use for classification
 GEMINI_API_KEY = "your_gemini_api_key_here"  # API key (should be in env var)
 
+# Import Google scraping functionality
+try:
+    from google_scrape import scrape_google_shopping_deals
+    GOOGLE_SCRAPE_AVAILABLE = True
+except ImportError:
+    print("Warning: google_scrape.py not found. Deal analysis will be skipped.")
+    GOOGLE_SCRAPE_AVAILABLE = False
+    scrape_google_shopping_deals = None
+
 # Center region detection (as percentage of frame)
 CENTER_REGION_WIDTH = 0.3   # 30% of frame width
 CENTER_REGION_HEIGHT = 0.3  # 30% of frame height
@@ -119,6 +128,21 @@ CART_CHECK_PROMPT = (
     "Respond with a JSON object: {\"is_duplicate\": true/false, \"similar_item\": \"item_name\", \"time_diff\": seconds, \"reason\": \"explanation\"}"
 )
 
+DEAL_ANALYSIS_PROMPT = (
+    "You are a friendly shopping assistant. "
+    "I detected: {item_name} ({brand}) - {category}\n"
+    "Here are current deals:\n{deals_data}\n\n"
+    "Give me 2 conversational sentences:\n"
+    "1. Tell me the best deal for THIS EXACT product and where to get it\n"
+    "2. Suggest ONE good alternative product I could consider instead\n\n"
+    "Respond ONLY with valid JSON (no markdown, no code blocks):\n"
+    "{{\n"
+    '  "best_deal_message": "The best deal for [product] is $X.XX at [store].",\n'
+    '  "alternative_message": "You might also consider [alternative product] for $X.XX at [store], which [reason]."\n'
+    "}}\n"
+    "Keep it natural and conversational. Make sure the JSON is valid."
+)
+
 class CenterObjectClassifier:
     def __init__(self):
         self.gemini_client = None
@@ -148,6 +172,10 @@ class CenterObjectClassifier:
         self.last_api_call_time = 0
         self.pending_classifications = []  # Queue for pending classifications
         
+        # Deal analysis tracking
+        self.deal_analysis_results = []  # Store all deal analysis results
+        self.deal_analysis_cache = {}  # Cache deal analysis by product name {item_key: deal_analysis}
+        
         # Create captures directory
         self.captures_dir.mkdir(exist_ok=True)
     
@@ -170,6 +198,8 @@ class CenterObjectClassifier:
         print(f"Similarity Threshold: {DEDUPLICATION_SIMILARITY_THRESHOLD}")
         print(f"Grocery Filtering: Active (only grocery items held by hands added to cart)")
         print(f"Confidence Threshold: {MIN_CONFIDENCE_THRESHOLD} (only high-confidence classifications)")
+        print(f"Deal Analysis: {'Active' if GOOGLE_SCRAPE_AVAILABLE else 'Not available'} (Google Shopping + Gemini analysis for each item)")
+        print(f"Google Scrape Module: {'Available' if GOOGLE_SCRAPE_AVAILABLE else 'Not found'}")
         print("="*60)
         print("CURRENT PROMPT:")
         print("-" * 40)
@@ -270,11 +300,92 @@ class CenterObjectClassifier:
                     'category': category,
                     'count': 1,
                     'confidence': confidence,
-                    'last_seen': current_time
+                    'last_seen': current_time,
+                    'deal_analysis': None  # Will be populated by deal analysis (performed before cart update)
                 }
                 print(f"🛒 Added to cart: {object_name} ({brand})")
             
             self.last_cart_update[item_key] = current_time
+    
+    async def perform_deal_analysis(self, object_name: str, brand: str, category: str, item_key: str):
+        """Perform deal analysis for a newly added item"""
+        if not GOOGLE_SCRAPE_AVAILABLE or not scrape_google_shopping_deals:
+            print("⚠️ Google scraping not available. Skipping deal analysis.")
+            return
+        
+        # Check if we already have cached deal analysis for this item
+        if item_key in self.deal_analysis_cache:
+            print(f"💾 Using cached deal analysis for: {object_name}")
+            cached_analysis = self.deal_analysis_cache[item_key]
+            
+            # Update the cart item with cached analysis
+            if item_key in self.cart:
+                self.cart[item_key]['deal_analysis'] = cached_analysis
+            
+            # Print the cached analysis summary
+            self.print_deal_analysis_summary(cached_analysis, object_name)
+            return
+            
+        try:
+            # Create search query for the item
+            search_query = f"{object_name} {brand}".strip()
+            print(f"🔍 Searching for deals: {search_query}")
+            
+            # Scrape Google Shopping for deals using the existing function
+            deals_data = scrape_google_shopping_deals(search_query)
+            
+            if deals_data:
+                print(f"💰 Found {len(deals_data)} deals for {object_name}")
+                
+                # Analyze deals with Gemini
+                deal_analysis = await self.analyze_deals_with_gemini(object_name, brand, category, deals_data)
+                
+                if deal_analysis:
+                    # Cache the deal analysis for future use
+                    self.deal_analysis_cache[item_key] = deal_analysis
+                    print(f"💾 Cached deal analysis for: {object_name}")
+                    
+                    # Store deal analysis in cart item
+                    if item_key in self.cart:
+                        self.cart[item_key]['deal_analysis'] = deal_analysis
+                    
+                    # Store in deal analysis results
+                    deal_record = {
+                        "timestamp": datetime.now().isoformat(),
+                        "item_name": object_name,
+                        "brand": brand,
+                        "category": category,
+                        "search_query": search_query,
+                        "deals_found": len(deals_data),
+                        "deals_data": deals_data,
+                        "analysis": deal_analysis,
+                        "cached": False  # First time analysis
+                    }
+                    self.deal_analysis_results.append(deal_record)
+                    
+                    # Print deal analysis summary
+                    self.print_deal_analysis_summary(deal_analysis, object_name)
+                else:
+                    print(f"❌ Failed to analyze deals for {object_name}")
+            else:
+                print(f"❌ No deals found for {object_name}")
+                
+        except Exception as e:
+            print(f"❌ Error performing deal analysis for {object_name}: {e}")
+    
+    def print_deal_analysis_summary(self, deal_analysis: Dict[str, Any], item_name: str):
+        """Print a summary of the deal analysis"""
+        print(f"\n💰 Shopping Assistant for {item_name}:")
+        print("-" * 50)
+        
+        # Show the two conversational messages
+        if deal_analysis.get('best_deal_message'):
+            print(f"🛍️  {deal_analysis['best_deal_message']}")
+        
+        if deal_analysis.get('alternative_message'):
+            print(f"💡 {deal_analysis['alternative_message']}")
+        
+        print("-" * 50)
     
     def print_cart(self):
         """Print the current shopping cart"""
@@ -293,14 +404,27 @@ class CenterObjectClassifier:
             brand = item_data['brand']
             category = item_data['category']
             confidence = item_data['confidence']
+            deal_analysis = item_data.get('deal_analysis')
             
             print(f"• {name} ({brand}) - {category}")
             print(f"  Quantity: {count} | Confidence: {confidence:.2f}")
+            
+            # Show deal analysis if available
+            if deal_analysis:
+                if deal_analysis.get('best_deal_message'):
+                    print(f"  🛍️  {deal_analysis['best_deal_message']}")
+                if deal_analysis.get('alternative_message'):
+                    print(f"  💡 {deal_analysis['alternative_message']}")
+            else:
+                print(f"  🔍 Deal analysis pending...")
+            
             total_items += count
         
         print("-" * 60)
         print(f"Total items: {total_items}")
         print(f"Unique items: {len(self.cart)}")
+        print(f"Deal analyses completed: {len([item for item in self.cart.values() if item.get('deal_analysis')])}")
+        print(f"Cached deal analyses: {len(self.deal_analysis_cache)}")
         if self.bag_detected:
             print(f"Bag detected: Yes (confidence: {self.bag_detection_confidence:.2f})")
         print("="*60)
@@ -564,7 +688,8 @@ class CenterObjectClassifier:
                 "total_items": sum(item['count'] for item in self.cart.values()),
                 "unique_items": len(self.cart),
                 "categories": list(set(item['category'] for item in self.cart.values())),
-                "brands": list(set(item['brand'] for item in self.cart.values()))
+                "brands": list(set(item['brand'] for item in self.cart.values())),
+                "items_with_deal_analysis": len([item for item in self.cart.values() if item.get('deal_analysis')])
             },
             "all_classifications": self.all_classifications,
             "classification_summary": {
@@ -574,6 +699,16 @@ class CenterObjectClassifier:
                 "skipped_classifications": len([c for c in self.all_classifications if c.get('skipped', False)]),
                 "actual_api_calls": len([c for c in self.all_classifications if not c.get('skipped', False)]),
                 "deduplication_rate": len([c for c in self.all_classifications if c.get('skipped', False)]) / max(len(self.all_classifications), 1) * 100
+            },
+            "deal_analysis_results": self.deal_analysis_results,
+            "deal_analysis_cache": self.deal_analysis_cache,
+            "deal_analysis_summary": {
+                "total_deal_analyses": len(self.deal_analysis_results),
+                "successful_analyses": len([d for d in self.deal_analysis_results if d.get('analysis')]),
+                "total_deals_found": sum(d.get('deals_found', 0) for d in self.deal_analysis_results),
+                "items_analyzed": list(set(d.get('item_name', '') for d in self.deal_analysis_results)),
+                "cached_items": len(self.deal_analysis_cache),
+                "cache_hit_rate": f"{(len([d for d in self.deal_analysis_results if d.get('cached', False)]) / max(len(self.deal_analysis_results), 1)) * 100:.1f}%"
             }
         }
         
@@ -584,6 +719,7 @@ class CenterObjectClassifier:
         except Exception as e:
             print(f"❌ Error saving results to JSON: {e}")
     
+
     def setup_gemini_client(self):
         """Initialize Gemini client"""
         if not GEMINI_AVAILABLE:
@@ -818,6 +954,113 @@ class CenterObjectClassifier:
                 "error": str(e)
             }
     
+    async def analyze_deals_with_gemini(self, item_name: str, brand: str, category: str, deals_data: List[Dict[str, str]]) -> Optional[Dict[str, Any]]:
+        """Analyze deals using Gemini API"""
+        if not self.gemini_client or not GEMINI_AVAILABLE or not deals_data:
+            return None
+        
+        try:
+            # Format deals data for the prompt
+            deals_text = "\n".join([f"- {deal['title']} | {deal['price']} | {deal['store']}" for deal in deals_data[:10]])  # Limit to top 10 deals
+            
+            # Create the prompt
+            prompt = DEAL_ANALYSIS_PROMPT.format(
+                item_name=item_name,
+                brand=brand,
+                category=category,
+                deals_data=deals_text
+            )
+            
+            # Generate content with JSON mode configuration
+            generation_config = {
+                "temperature": 0.1,  # Lower temperature for more consistent JSON
+                "top_p": 0.8,
+                "top_k": 40,
+                "max_output_tokens": 2048,
+            }
+            
+            response = await asyncio.to_thread(
+                self.gemini_client.generate_content,
+                prompt,
+                generation_config=generation_config
+            )
+            
+            # Parse response
+            response_text = response.text if hasattr(response, 'text') else str(response)
+            print(f"🔍 Gemini raw response (first 500 chars): {response_text[:500]}")
+            
+            if response_text:
+                # Try to extract JSON from response
+                try:
+                    # Remove markdown code blocks if present
+                    if "```json" in response_text:
+                        json_start = response_text.find("```json") + 7
+                        json_end = response_text.find("```", json_start)
+                        json_text = response_text[json_start:json_end].strip()
+                    elif "```" in response_text:
+                        json_start = response_text.find("```") + 3
+                        json_end = response_text.find("```", json_start)
+                        json_text = response_text[json_start:json_end].strip()
+                    elif "{" in response_text and "}" in response_text:
+                        # Find the outermost JSON object
+                        json_start = response_text.find("{")
+                        json_end = response_text.rfind("}") + 1
+                        json_text = response_text[json_start:json_end]
+                    else:
+                        json_text = response_text
+                    
+                    # Clean up the JSON text
+                    json_text = json_text.strip()
+                    
+                    # Try to parse
+                    result = json.loads(json_text)
+                    
+                    # Validate the structure
+                    if not isinstance(result, dict):
+                        raise ValueError("Response is not a JSON object")
+                    
+                    # Ensure required fields exist (with defaults)
+                    if 'best_deal_message' not in result:
+                        result['best_deal_message'] = "No deal information available"
+                    if 'alternative_message' not in result:
+                        result['alternative_message'] = "No alternatives found"
+                    
+                    return result
+                    
+                except (json.JSONDecodeError, ValueError) as e:
+                    print(f"⚠️  JSON parsing error: {e}")
+                    print(f"   Response text (first 300 chars): {response_text[:300]}")
+                    return {
+                        "best_deal": None,
+                        "alternatives": [],
+                        "recommendations": ["Could not parse deal analysis - Gemini returned invalid JSON"],
+                        "analysis": f"Error parsing response: {str(e)}",
+                        "raw_response": response_text[:500]
+                    }
+            
+            return None
+            
+        except KeyError as e:
+            print(f"❌ KeyError in deal analysis: {e}")
+            print(f"   This usually means Gemini returned unexpected JSON structure")
+            return {
+                "best_deal": None,
+                "alternatives": [],
+                "recommendations": ["Gemini returned unexpected JSON format"],
+                "analysis": f"KeyError: {str(e)} - Check Gemini response format",
+                "error": f"KeyError: {str(e)}"
+            }
+        except Exception as e:
+            print(f"❌ Error analyzing deals with Gemini: {e}")
+            print(f"   Error type: {type(e).__name__}")
+            return {
+                "best_deal": None,
+                "alternatives": [],
+                "recommendations": ["Error analyzing deals"],
+                "analysis": f"Error ({type(e).__name__}): {str(e)}",
+                "error": str(e)
+            }
+    
     async def process_frame(self, frame: cv2.Mat) -> Dict[str, Any]:
         """Process a single frame for center object detection using motion and scene change"""
         frame_height, frame_width = frame.shape[:2]
@@ -959,6 +1202,11 @@ class CenterObjectClassifier:
         print("Using motion detection and scene change detection (no external APIs)")
         print("🛒 Cart tracking is active - only grocery items held by hands will be added")
         print(f"⏱️  API calls limited to once every {CLASSIFICATION_COOLDOWN}s, cart updates are immediate")
+        if GOOGLE_SCRAPE_AVAILABLE:
+            print("💰 Deal analysis is active - Google Shopping + Gemini analysis for each new item")
+            print("🔍 Google scraping integration enabled - will search for deals automatically")
+        else:
+            print("⚠️  Google scraping module not found - deal analysis will be skipped")
         
         try:
             while True:
@@ -1032,6 +1280,24 @@ class CenterObjectClassifier:
                             self.last_classification_result = classification
                             
                             if classification:
+                                # Perform deal analysis for non-duplicate classifications
+                                object_name = classification.get('object_name', 'Unknown')
+                                brand = classification.get('brand', 'Unknown')
+                                category = classification.get('category', 'Unknown')
+                                confidence = classification.get('confidence', 0.0)
+                                
+                                # Check if this is a valid grocery item with sufficient confidence
+                                if (confidence >= MIN_CONFIDENCE_THRESHOLD and 
+                                    object_name not in ["no_hand_holding_object", "unidentifiable_item"] and
+                                    self.is_grocery_item(classification)):
+                                    
+                                    # Create item key for tracking
+                                    item_key = f"{object_name}_{self.normalize_brand_name(brand)}".lower()
+                                    
+                                    # Perform deal analysis if this is a new classification (not a duplicate)
+                                    if not self.is_duplicate_item(object_name, brand):
+                                        await self.perform_deal_analysis(object_name, brand, category, item_key)
+                                
                                 # Update cart immediately (no cooldown for cart updates)
                                 await self.update_cart(classification)
                             else:

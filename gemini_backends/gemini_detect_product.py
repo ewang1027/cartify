@@ -116,10 +116,11 @@ class VideoClipSummarizer:
                     types.Part.from_text(
                         text=(
                             "If the center of this one-second video clearly shows a retail product, "
-                            "respond with a single JSON object containing keys product_brand, product_name, and price. "
-                            "The prodctu_brand is the name of the company that makes the product. product_name is the name of this specific product."
-                            "Each value must be either a string (when confidently observed) or null. "
-                            "If no product is visible, respond with {\"product_brand\": null, \"product_name\": null, \"price\": null}."
+                            "respond with a single JSON object containing keys product_brand, product_name, price, and is_picked_up. "
+                            "product_brand is the company that makes the product, product_name is the specific product name, price is the listed price string if visible. "
+                            "Set is_picked_up to true when a hand is visibly holding or picking up the product; otherwise false. "
+                            "Each value must be either a string/boolean (when confidently observed) or null. "
+                            "If no product is visible, respond with {\"product_brand\": null, \"product_name\": null, \"price\": null, \"is_picked_up\": null}."
                         )
                     ),
                 ],
