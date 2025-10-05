@@ -114,24 +114,18 @@ CART_UPDATE_COOLDOWN = 0.0  # No cooldown for cart updates (immediate)
 # =============================================================================
 
 GEMINI_PROMPT = (
-    "ROLE: You are a visual classification assistant that identifies grocery items held up by a visible hand in an image.\n\n"
-    "TASK:\n"
-    "1. Only classify objects that are clearly being held up by a visible human hand.\n"
-    "2. If no hand is visible or holding an item, respond with:\n"
-    '{"object_name": "no_hand_holding_object", "brand": "N/A", "category": "other", "confidence": 0.0}\n'
-    "3. If you cannot confidently identify the item, respond with:\n"
-    '{"object_name": "unidentifiable_item", "brand": "N/A", "category": "other", "confidence": 0.0}\n\n'
-    "OUTPUT:\n"
-    "Respond ONLY with a valid JSON object in this format:\n"
-    "{\n"
-    '  "object_name": "[specific grocery item name]",\n'
-    '  "brand": "[brand name if visible, else N/A]",\n'
-    '  "category": "[grocery category: food | beverage | snack | etc.]",\n'
-    '  "confidence": [float between 0 and 1]\n'
-    "}\n\n"
-    "NOTES:\n"
-    "- Be precise and conservative: only classify if confident.\n"
-    "- Do not include any text, commentary, or formatting outside the JSON."
+    "You are an assistant that identifies grocery items being held up to the camera by a hand. "
+    "ONLY classify objects that are being held up by a visible hand in the image. "
+    "Be VERY careful and accurate - only identify items you can clearly see and recognize. "
+    "If no hand is holding an object, respond with: {\"object_name\": \"no_hand_holding_object\", \"brand\": \"N/A\", \"category\": \"other\", \"confidence\": 0.0} "
+    "If you cannot clearly identify what the item is, respond with: {\"object_name\": \"unidentifiable_item\", \"brand\": \"N/A\", \"category\": \"other\", \"confidence\": 0.0} "
+    "Look at this image and respond with a JSON object containing "
+    "the following keys: object_name, brand, category, confidence. "
+    "object_name should be the specific name of the grocery item being held (be precise). "
+    "brand should be the brand name of the item (only if clearly visible). "
+    "category should be a grocery category (e.g., 'food', 'beverage', 'snack'). "
+    "confidence should be a number between 0 and 1 indicating how confident you are that a hand is holding a clearly identifiable grocery item. "
+    "Only detect grocery items that are clearly being held up by a hand to the camera and that you can confidently identify."
 )
 
 CART_CHECK_PROMPT = (
