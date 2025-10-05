@@ -19,6 +19,7 @@ Features:
 import asyncio
 import json
 import os
+import re
 import subprocess
 import tempfile
 import time
@@ -93,6 +94,9 @@ HISTOGRAM_COMPARISON_THRESHOLD = 0.7  # Correlation threshold for scene change (
 BAG_DETECTION_KEYWORDS = ['bag', 'shopping bag', 'tote', 'container', 'basket', 'cart']
 CART_UPDATE_COOLDOWN = 10.0  # Seconds between cart updates for same item (increased to prevent duplicates)
 CART_FUZZY_MATCH_WINDOW = 10.0  # Seconds - don't add similar items if added within this window
+
+# Persistence parameters
+RESULTS_FLUSH_DELAY = 2.0  # Seconds to wait after last cart update before saving results
 
 # Grocery filtering parameters
 GROCERY_CATEGORIES = ['food', 'beverage', 'snack', 'snack food', 'dairy', 'produce', 'meat', 'bakery', 'frozen', 'pantry', 'condiment', 'spice', 'cereal', 'candy', 'chocolate', 'drink', 'juice', 'soda', 'water', 'coffee', 'tea', 'alcohol', 'wine', 'beer']
@@ -202,14 +206,16 @@ class CenterObjectClassifier:
         self.pending_classifications = []  # Queue for pending classifications
         
         # Deal analysis tracking
-        self.deal_analysis_results = []  # Store all deal analysis results
-        self.deal_analysis_cache = {}  # Cache deal analysis by product name {item_key: deal_analysis}
-        self.spoken_items = set()  # Track which items have been spoken already
+        self.deal_analysis_results: List[Dict[str, Any]] = []  # Store all deal analysis results
+        self.deal_analysis_cache: Dict[str, Dict[str, Any]] = {}  # Cache deal analysis by product name {item_key: deal_analysis}
+        self.spoken_items: set[str] = set()  # Track which items have been spoken already
         self.window_shown = False  # Track if CV2 window has been displayed
         self.window_shown_time = 0  # Track when window was first shown for delayed speech
-        self.pending_speech = []  # Queue for speech that needs to wait for window
+        self.pending_speech: List[Tuple[str, Optional[str]]] = []  # Queue for speech that needs to wait for window
         self.current_audio_process = None  # Track current playing audio to allow interruption
-        self.background_tasks = set()  # Track background deal analysis tasks
+        self.background_tasks: set[asyncio.Task] = set()  # Track background deal analysis tasks
+        self._flush_task: Optional[asyncio.Task] = None  # Delayed persistence task
+        self._last_cart_update: float = 0.0  # Timestamp of last cart mutation
         
         # Create captures directory
         self.captures_dir.mkdir(exist_ok=True)
@@ -272,6 +278,7 @@ class CenterObjectClassifier:
         
         # Handle both single objects and lists
         objects = classification_result if isinstance(classification_result, list) else [classification_result]
+        cart_modified = False
         
         for obj in objects:
             if not isinstance(obj, dict):
@@ -331,6 +338,7 @@ class CenterObjectClassifier:
                 if image_path:
                     self.cart[item_key]['image_path'] = image_path
                 print(f"🛒 Updated cart: {object_name} (x{self.cart[item_key]['count']})")
+                cart_modified = True
             else:
                 self.cart[item_key] = {
                     'name': object_name,
@@ -343,8 +351,13 @@ class CenterObjectClassifier:
                     'image_path': image_path  # Store the path to the capture image
                 }
                 print(f"🛒 Added to cart: {object_name} ({brand})")
+                cart_modified = True
             
             self.last_cart_update[item_key] = current_time
+
+        if cart_modified:
+            self._last_cart_update = current_time
+            await self.schedule_cart_flush()
     
     async def perform_deal_analysis(self, object_name: str, brand: str, category: str, item_key: str):
         """Perform deal analysis for a newly added item"""
@@ -395,6 +408,10 @@ class CenterObjectClassifier:
             # Update the cart item with cached analysis
             if item_key in self.cart:
                 self.cart[item_key]['deal_analysis'] = cached_analysis
+                extracted_price = self.extract_best_deal_price(cached_analysis.get('best_deal_message'))
+                if extracted_price is not None:
+                    self.cart[item_key]['price'] = extracted_price
+                await self.schedule_cart_flush()
             
             # Print the cached analysis summary (with item_key to prevent re-speaking)
             await self.print_deal_analysis_summary(cached_analysis, object_name, item_key)
@@ -425,6 +442,10 @@ class CenterObjectClassifier:
                     # Store deal analysis in cart item
                     if item_key in self.cart:
                         self.cart[item_key]['deal_analysis'] = deal_analysis
+                        extracted_price = self.extract_best_deal_price(deal_analysis.get('best_deal_message'))
+                        if extracted_price is not None:
+                            self.cart[item_key]['price'] = extracted_price
+                        await self.schedule_cart_flush()
                     
                     # Store in deal analysis results
                     deal_record = {
@@ -839,13 +860,7 @@ class CenterObjectClassifier:
             "bag_detected": self.bag_detected,
             "bag_detection_confidence": self.bag_detection_confidence,
             "shopping_cart": self.cart,
-            "cart_summary": {
-                "total_items": sum(item['count'] for item in self.cart.values()),
-                "unique_items": len(self.cart),
-                "categories": list(set(item['category'] for item in self.cart.values())),
-                "brands": list(set(item['brand'] for item in self.cart.values())),
-                "items_with_deal_analysis": len([item for item in self.cart.values() if item.get('deal_analysis')])
-            },
+            "cart_summary": self.build_cart_summary(),
             "all_classifications": self.all_classifications,
             "classification_summary": {
                 "total_classifications": len(self.all_classifications),
@@ -874,6 +889,99 @@ class CenterObjectClassifier:
         except Exception as e:
             print(f"❌ Error saving results to JSON: {e}")
     
+    async def schedule_cart_flush(self) -> None:
+        """Schedule a delayed cart deduplication and results save."""
+        if self._flush_task and not self._flush_task.done():
+            self._flush_task.cancel()
+
+        async def _flush_task_wrapper() -> None:
+            try:
+                await asyncio.sleep(RESULTS_FLUSH_DELAY)
+                await self.deduplicate_and_save_cart()
+            except asyncio.CancelledError:
+                pass
+
+        self._flush_task = asyncio.create_task(_flush_task_wrapper())
+
+    async def deduplicate_and_save_cart(self) -> None:
+        """Deduplicate cart entries and persist the latest state to disk."""
+        self.deduplicate_cart_entries()
+        await asyncio.to_thread(self.save_results_to_json)
+
+    def deduplicate_cart_entries(self) -> None:
+        """Merge similar cart entries into single consolidated records."""
+        deduplicated_cart: Dict[str, Dict[str, Any]] = {}
+
+        for item_key, item_data in self.cart.items():
+            merged_key = self._find_matching_cart_key(deduplicated_cart, item_data)
+
+            if merged_key:
+                merged_item = deduplicated_cart[merged_key]
+                merged_item['count'] += item_data.get('count', 0)
+                merged_item['confidence'] = max(merged_item.get('confidence', 0.0), item_data.get('confidence', 0.0))
+                merged_item['last_seen'] = max(merged_item.get('last_seen', 0.0), item_data.get('last_seen', 0.0))
+
+                if item_data.get('deal_analysis'):
+                    merged_item['deal_analysis'] = item_data['deal_analysis']
+
+                if item_data.get('price') is not None and merged_item.get('price') is None:
+                    merged_item['price'] = item_data['price']
+
+                if item_data.get('image_path'):
+                    merged_item['image_path'] = item_data['image_path']
+            else:
+                deduplicated_cart[item_key] = item_data.copy()
+
+        self.cart = deduplicated_cart
+
+    def build_cart_summary(self) -> Dict[str, Any]:
+        """Construct the cart summary data structure."""
+        totals = {
+            "total_items": sum(item['count'] for item in self.cart.values()),
+            "unique_items": len(self.cart),
+            "categories": list(set(item['category'] for item in self.cart.values())),
+            "brands": list(set(item['brand'] for item in self.cart.values())),
+            "items_with_deal_analysis": len([item for item in self.cart.values() if item.get('deal_analysis')]),
+        }
+
+        total_price = 0.0
+        for item in self.cart.values():
+            price = item.get('price')
+            count = item.get('count', 0)
+            if price is not None:
+                total_price += float(price) * max(int(count), 1)
+
+        totals['total_price'] = round(total_price, 2)
+        return totals
+
+    def _find_matching_cart_key(self, existing_cart: Dict[str, Dict[str, Any]], candidate: Dict[str, Any]) -> Optional[str]:
+        """Identify an existing cart entry that matches the candidate item."""
+        candidate_name = candidate.get('name', '').lower()
+        candidate_brand = candidate.get('brand', '').lower()
+
+        for key, existing_item in existing_cart.items():
+            name_similarity = self.calculate_name_similarity(candidate_name, existing_item.get('name', '').lower())
+            brand_similarity = self.calculate_name_similarity(candidate_brand, existing_item.get('brand', '').lower())
+
+            if name_similarity > 0.8 and brand_similarity > 0.8:
+                return key
+
+        return None
+
+    def extract_best_deal_price(self, best_deal_message: Optional[str]) -> Optional[float]:
+        """Extract numeric price from a best deal message."""
+        if not best_deal_message:
+            return None
+
+        price_match = re.search(r"\$([0-9]+(?:\.[0-9]{1,2})?)", best_deal_message)
+        if not price_match:
+            return None
+
+        try:
+            return float(price_match.group(1))
+        except (ValueError, TypeError):
+            return None
+
 
     def setup_gemini_client(self):
         """Initialize Gemini client"""
@@ -1540,6 +1648,12 @@ class CenterObjectClassifier:
             if self.background_tasks:
                 print(f"⏳ Waiting for {len(self.background_tasks)} background tasks to complete...")
                 await asyncio.gather(*self.background_tasks, return_exceptions=True)
+
+            if self._flush_task and not self._flush_task.done():
+                try:
+                    await self._flush_task
+                except asyncio.CancelledError:
+                    pass
             
             cap.release()
             cv2.destroyAllWindows()
@@ -1549,7 +1663,7 @@ class CenterObjectClassifier:
             self.print_cart()
             
             # Save results to JSON
-            self.save_results_to_json()
+            await self.deduplicate_and_save_cart()
 
 async def main():
     """Main entry point"""

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Plus, Radio } from "lucide-react";
 import { TopNavigation } from "@/components/TopNavigation";
@@ -13,20 +13,24 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { fetchSustainabilityComment, playAudioFromBase64 } from "@/utils/audioUtils";
-import { getCurrentLocation, formatLocation, LocationData } from "@/utils/locationUtils";
+import { getCurrentLocation, formatLocation } from "@/utils/locationUtils";
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [items, setItems] = useState<CartItemType[]>([]);
   const [syncEnabled, setSyncEnabled] = useState(false);
+  const [isPolling, setIsPolling] = useState(true);
+  const [totalSpentExternal, setTotalSpentExternal] = useState<number | null>(null);
   const [budget, setBudget] = useState(100);
   const [sustainabilityPreference, setSustainabilityPreference] = useState<'low' | 'medium' | 'high'>('medium');
   const [showPreferencesDialog, setShowPreferencesDialog] = useState(false);
   const [hasSetPreferences, setHasSetPreferences] = useState(false);
   const [userLocation, setUserLocation] = useState<string>('');
 
-  const totalSpent = items.reduce((sum, item) => sum + item.price, 0);
+  const totalSpent = useMemo(() => (
+    totalSpentExternal ?? items.reduce((sum, item) => sum + item.price, 0)
+  ), [items, totalSpentExternal]);
   const avgSustainability = items.length > 0
     ? Math.round(items.reduce((sum, item) => sum + item.sustainabilityScore, 0) / items.length)
     : 0;
