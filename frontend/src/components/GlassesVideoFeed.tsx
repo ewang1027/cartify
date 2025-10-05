@@ -159,7 +159,7 @@ export const GlassesVideoFeed = ({ isActive }: GlassesVideoFeedProps) => {
         </div>
       </div>
 
-      <div className="relative bg-black aspect-[9/16] flex items-center justify-center">
+      <div className="relative bg-black aspect-[3.2/6] flex items-center justify-center">
         {isActive && isStreaming ? (
           <canvas
             ref={canvasRef}

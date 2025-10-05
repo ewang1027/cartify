@@ -81,22 +81,9 @@ const Dashboard = () => {
     }
   }, [avgSustainability, items.length]);
 
-  // Show preferences dialog on first visit
+  // Show preferences dialog every time user enters dashboard
   useEffect(() => {
-    const preferences = localStorage.getItem('userPreferences');
-    if (!preferences) {
-      setShowPreferencesDialog(true);
-    } else {
-      try {
-        const parsed = JSON.parse(preferences);
-        setBudget(parsed.budget || 100);
-        setSustainabilityPreference(parsed.sustainabilityPreference || 'medium');
-        setHasSetPreferences(true);
-      } catch (error) {
-        console.error('Error parsing saved preferences:', error);
-        setShowPreferencesDialog(true);
-      }
-    }
+    setShowPreferencesDialog(true);
   }, []);
 
   const handleRemoveItem = (id: string) => {
@@ -125,7 +112,7 @@ const Dashboard = () => {
     setSyncEnabled(checked);
     if (checked) {
       toast.info("Glasses sync enabled", {
-        description: "Now listening for products...",
+        description: "Now looking for grocery products...",
       });
     } else {
       toast.info("Glasses sync disabled");
@@ -137,14 +124,7 @@ const Dashboard = () => {
     setSustainabilityPreference(newSustainabilityPreference);
     setHasSetPreferences(true);
     
-    // Save to localStorage
-    const preferences = {
-      budget: newBudget,
-      sustainabilityPreference: newSustainabilityPreference
-    };
-    localStorage.setItem('userPreferences', JSON.stringify(preferences));
-    
-    toast.success("Preferences saved!", {
+    toast.success("Preferences updated!", {
       description: `Budget: $${newBudget} • ${newSustainabilityPreference === 'high' ? 'Eco Conscious' : newSustainabilityPreference === 'medium' ? 'Balanced' : 'Budget Focused'}`
     });
   };
