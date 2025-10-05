@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { fetchSustainabilityComment, playAudioFromBase64 } from "@/utils/audioUtils";
+import { getCurrentLocation, formatLocation, LocationData } from "@/utils/locationUtils";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -21,6 +22,7 @@ const Dashboard = () => {
   const [sustainabilityPreference, setSustainabilityPreference] = useState<'low' | 'medium' | 'high'>('medium');
   const [showPreferencesDialog, setShowPreferencesDialog] = useState(false);
   const [hasSetPreferences, setHasSetPreferences] = useState(false);
+  const [userLocation, setUserLocation] = useState<string>('');
 
   const totalSpent = items.reduce((sum, item) => sum + item.price, 0);
   const avgSustainability = items.length > 0
@@ -46,6 +48,22 @@ const Dashboard = () => {
   // Show preferences dialog every time user enters dashboard
   useEffect(() => {
     setShowPreferencesDialog(true);
+  }, []);
+
+  // Fetch user location on component mount
+  useEffect(() => {
+    const fetchLocation = async () => {
+      try {
+        const locationData = await getCurrentLocation();
+        const formattedLocation = formatLocation(locationData);
+        setUserLocation(formattedLocation);
+      } catch (error) {
+        console.error('Error fetching location:', error);
+        setUserLocation('Location unavailable');
+      }
+    };
+
+    fetchLocation();
   }, []);
 
   const handleRemoveItem = (id: string) => {
@@ -105,7 +123,7 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar username="Manoj" budget={budget} />
+      <Navbar username="Manoj" budget={budget} location={userLocation} />
       
       {/* Preferences Dialog */}
       <BudgetPreferencesDialog
