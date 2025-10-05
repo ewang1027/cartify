@@ -1,0 +1,21 @@
+Card,Issuer,Groceries,Dining,Gas,Travel_Portal,Travel_General,Drugstores,Transit,Streaming,Wholesale_Clubs,Walmart_Target,Amazon_WholeFoods,Everything_Else
+Amex Gold,American Express,4,4,,,3,,,,,,,1
+Blue Cash Preferred,American Express,6,,3,,,,3,6,,,,1
+Chase Freedom Flex,Chase,,3,3,5,,3,,,,,,1
+Chase Freedom Unlimited,Chase,,3,,5,,3,,,,,,1.5
+Chase Sapphire Preferred,Chase,,3,,5,2,,,,,,,1
+Chase Sapphire Reserve,Chase,,3,,10,3,,,,,,,1
+Citi Custom Cash,Citi,5,5,5,,,,5,,,,,1
+Citi Double Cash,Citi,,,,5,,,,,,,,2
+Wells Fargo Active Cash,Wells Fargo,,,,,,,,,,,,2
+Wells Fargo Autograph,Wells Fargo,,3,3,,3,,3,3,,,,1
+Capital One SavorOne,Capital One,3,3,,,,,,3,,,,1
+Capital One Venture,Capital One,,,,5,2,,,,,,,2
+Capital One Venture X,Capital One,,,,10,2,,,,,,,2
+Bank of America Customized Cash,Bank of America,2,,,,,,,,2,,,1
+Amazon Prime Visa,Chase / Amazon,,2,2,5,,,,,,,5,1
+Costco Anywhere Visa,Citi,2,3,4,,,,,,2,,,1
+Target Circle Card,TD Bank / Target,,,,,,,,,,5,,
+Discover it Cash Back,Discover,5,,5,,,,5,,5,,,1
+U.S. Bank Cash+,U.S. Bank,5,,5,,,,,,,,,1
+Apple Card,Goldman Sachs / Apple,,,3,,,3,,,,,,2
