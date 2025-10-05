@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Plus, Radio } from "lucide-react";
-import { Navbar } from "@/components/Navbar";
+import { TopNavigation } from "@/components/TopNavigation";
 import { BudgetCard } from "@/components/BudgetCard";
 import { SustainabilityCard } from "@/components/SustainabilityCard";
 import { CartItem, CartItemType } from "@/components/CartItem";
@@ -16,6 +16,7 @@ import { getCurrentLocation, formatLocation, LocationData } from "@/utils/locati
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [items, setItems] = useState<CartItemType[]>([]);
   const [syncEnabled, setSyncEnabled] = useState(false);
   const [budget, setBudget] = useState(100);
@@ -45,10 +46,13 @@ const Dashboard = () => {
     }
   }, [avgSustainability, items.length]);
 
-  // Show preferences dialog every time user enters dashboard
+  // Show preferences dialog only when coming from home page, not from Analytics
   useEffect(() => {
-    setShowPreferencesDialog(true);
-  }, []);
+    const isComingFromAnalytics = location.state?.from === 'analytics';
+    if (!isComingFromAnalytics) {
+      setShowPreferencesDialog(true);
+    }
+  }, [location.state]);
 
   // Fetch user location on component mount
   useEffect(() => {
@@ -123,7 +127,7 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar username="Manoj" budget={budget} location={userLocation} />
+      <TopNavigation username="Manoj" budget={budget} location={userLocation} />
       
       {/* Preferences Dialog */}
       <BudgetPreferencesDialog
