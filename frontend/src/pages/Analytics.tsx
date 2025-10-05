@@ -3,17 +3,8 @@ import { TopNavigation } from "@/components/TopNavigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Trophy, Target, Leaf, TrendingUp, Users, Award, Flame } from "lucide-react";
+import { Target, Leaf, TrendingUp, Award, Flame } from "lucide-react";
 import { getCurrentLocation, formatLocation } from "@/utils/locationUtils";
-
-interface LeaderboardUser {
-  id: string;
-  name: string;
-  score: number;
-  sustainabilityScore: number;
-  avatar: string;
-  rank: number;
-}
 
 interface Challenge {
   id: string;
@@ -28,15 +19,6 @@ interface Challenge {
 const Analytics = () => {
   const [userLocation, setUserLocation] = useState<string>('');
   const [budget] = useState(100); // This would come from context/state management
-
-  // Mock data for leaderboard
-  const [leaderboard] = useState<LeaderboardUser[]>([
-    { id: "1", name: "EcoWarrior23", score: 1250, sustainabilityScore: 95, avatar: "E", rank: 1 },
-    { id: "2", name: "GreenGrocery", score: 1180, sustainabilityScore: 92, avatar: "G", rank: 2 },
-    { id: "3", name: "SustainableSam", score: 1100, sustainabilityScore: 88, avatar: "S", rank: 3 },
-    { id: "4", name: "Manoj", score: 950, sustainabilityScore: 85, avatar: "M", rank: 4 },
-    { id: "5", name: "EcoFriendly", score: 875, sustainabilityScore: 82, avatar: "E", rank: 5 },
-  ]);
 
   // Mock data for challenges
   const [challenges] = useState<Challenge[]>([
@@ -188,68 +170,8 @@ const Analytics = () => {
             </Card>
           </div>
 
-          {/* Right Column - Leaderboard and Challenges */}
+          {/* Right Column - Challenges */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Leaderboard */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Trophy className="w-5 h-5 text-yellow-500" />
-                  Global Leaderboard
-                </CardTitle>
-                <CardDescription>
-                  Top sustainable shoppers this month
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {leaderboard.map((user) => (
-                    <div
-                      key={user.id}
-                      className={`flex items-center gap-4 p-3 rounded-lg transition-colors ${
-                        user.name === "Manoj" 
-                          ? "bg-primary/10 border border-primary/20" 
-                          : "hover:bg-muted/50"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
-                          user.rank === 1 ? "bg-yellow-100 text-yellow-800" :
-                          user.rank === 2 ? "bg-gray-100 text-gray-800" :
-                          user.rank === 3 ? "bg-orange-100 text-orange-800" :
-                          "bg-muted text-muted-foreground"
-                        }`}>
-                          {user.rank}
-                        </div>
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-primary-foreground font-semibold ${
-                          user.name === "Manoj" ? "bg-primary" : "bg-gradient-hero"
-                        }`}>
-                          {user.avatar}
-                        </div>
-                      </div>
-                      
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-foreground">{user.name}</span>
-                          {user.name === "Manoj" && (
-                            <Badge variant="secondary" className="text-xs">You</Badge>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span>{user.score} pts</span>
-                          <span>•</span>
-                          <span className="flex items-center gap-1">
-                            <Leaf className="w-3 h-3 text-green-500" />
-                            {user.sustainabilityScore}% eco
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
             {/* Challenges */}
             <Card>
               <CardHeader>
