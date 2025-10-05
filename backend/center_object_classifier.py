@@ -285,7 +285,8 @@ class CenterObjectClassifier:
                 continue
                 
             object_name = obj.get('object_name', 'Unknown')
-            brand = self.normalize_brand_name(obj.get('brand', 'Unknown'))
+            brand = obj.get('brand', 'Unknown')
+            normalized_brand = self.normalize_brand_name(brand)
             category = obj.get('category', 'Unknown')
             confidence = obj.get('confidence', 0.0)
             
@@ -313,7 +314,7 @@ class CenterObjectClassifier:
                 continue
             
             # Check if this is a duplicate of an existing item
-            if self.is_duplicate_item(object_name, brand):
+            if self.is_duplicate_item(object_name, normalized_brand):
                 print(f"🔄 Skipping duplicate item: {object_name} ({brand})")
                 continue
             
@@ -323,7 +324,8 @@ class CenterObjectClassifier:
                 continue
             
             # Create a unique key for the item
-            item_key = f"{object_name}_{brand}".lower()
+            normalized_brand = self.normalize_brand_name(brand)
+            item_key = f"{object_name}_{normalized_brand}".lower()
             
             # Check cooldown to avoid duplicate additions (now 0 seconds = immediate updates)
             if item_key in self.last_cart_update:
@@ -342,7 +344,7 @@ class CenterObjectClassifier:
             else:
                 self.cart[item_key] = {
                     'name': object_name,
-                    'brand': brand,
+                    'brand': normalized_brand,
                     'category': category,
                     'count': 1,
                     'confidence': confidence,
@@ -350,7 +352,7 @@ class CenterObjectClassifier:
                     'deal_analysis': None,  # Will be populated by deal analysis (performed before cart update)
                     'image_path': image_path  # Store the path to the capture image
                 }
-                print(f"🛒 Added to cart: {object_name} ({brand})")
+                print(f"🛒 Added to cart: {object_name} ({normalized_brand})")
                 cart_modified = True
             
             self.last_cart_update[item_key] = current_time
@@ -361,10 +363,6 @@ class CenterObjectClassifier:
     
     async def perform_deal_analysis(self, object_name: str, brand: str, category: str, item_key: str):
         """Perform deal analysis for a newly added item"""
-        if not GOOGLE_SCRAPE_AVAILABLE or not scrape_google_shopping_deals:
-            print("⚠️ Google scraping not available. Skipping deal analysis.")
-            return
-        
         # Check if we already have cached deal analysis for this item
         print(f"🔍 Checking cache for item_key: '{item_key}'")
         
@@ -425,6 +423,10 @@ class CenterObjectClassifier:
         else:
             print(f"❌ CACHE MISS! No cached analysis found for: '{item_key}'")
             print(f"   Will perform Google Shopping search...")
+        
+        if not GOOGLE_SCRAPE_AVAILABLE or not scrape_google_shopping_deals:
+            print("⚠️ Google scraping not available. Skipping live deal analysis.")
+            return
             
         try:
             # Create search query for the item
@@ -1568,39 +1570,45 @@ class CenterObjectClassifier:
                             self.last_classification_result = classification
                             
                             if classification:
-                                # Schedule deal analysis in background BEFORE updating cart
+                                # Prepare classification details
                                 object_name = classification.get('object_name', 'Unknown')
                                 brand = classification.get('brand', 'Unknown')
                                 category = classification.get('category', 'Unknown')
                                 confidence = classification.get('confidence', 0.0)
-                                
+                                normalized_brand = self.normalize_brand_name(brand)
+
+                                should_perform_analysis = False
+                                item_key: Optional[str] = None
+
                                 # Check if this is a valid grocery item with sufficient confidence
                                 if (confidence >= MIN_CONFIDENCE_THRESHOLD and 
                                     object_name not in ["no_hand_holding_object", "unidentifiable_item"] and
                                     self.is_grocery_item(classification)):
                                     
                                     # Create item key for tracking
-                                    item_key = f"{object_name}_{self.normalize_brand_name(brand)}".lower()
+                                    item_key = f"{object_name}_{normalized_brand}".lower()
                                     
                                     # Use LLM to check if this is a duplicate (more accurate than string matching)
                                     is_duplicate_llm = await self.check_cart_duplicate_with_llm(object_name, brand, category, current_time)
                                     
                                     # Also check simple duplicate as fallback
-                                    is_duplicate_simple = self.is_duplicate_item(object_name, brand)
+                                    is_duplicate_simple = self.is_duplicate_item(object_name, normalized_brand)
                                     
-                                    # Perform deal analysis in background only if BOTH checks say it's not a duplicate
                                     if not is_duplicate_llm and not is_duplicate_simple:
-                                        # Create background task for deal analysis
-                                        task = asyncio.create_task(
-                                            self.perform_deal_analysis(object_name, brand, category, item_key)
-                                        )
-                                        self.background_tasks.add(task)
-                                        task.add_done_callback(self.background_tasks.discard)
-                                    elif is_duplicate_llm or is_duplicate_simple:
+                                        should_perform_analysis = True
+                                    else:
                                         print(f"⏭️  Skipping deal analysis for duplicate: {object_name}")
                                 
-                                # Update cart immediately (after checking for deal analysis)
+                                # Update cart immediately
                                 await self.update_cart(classification, image_path)
+
+                                # Schedule deal analysis only if appropriate
+                                if should_perform_analysis and item_key:
+                                    task = asyncio.create_task(
+                                        self.perform_deal_analysis(object_name, normalized_brand, category, item_key)
+                                    )
+                                    self.background_tasks.add(task)
+                                    task.add_done_callback(self.background_tasks.discard)
                             else:
                                 print("❌ Classification failed")
                                 classification_record["error"] = "Classification returned None"
