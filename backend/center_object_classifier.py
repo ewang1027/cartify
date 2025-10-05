@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Center Object Classifier - Monitors video feed for objects in center region
-and classifies them using Gemini API (without YOLO)
+and classifies them using Gemini API
 
 This script uses motion detection and scene change detection to automatically
 capture images when objects appear in the center region of the video feed.
@@ -19,6 +19,8 @@ Features:
 import asyncio
 import json
 import os
+import subprocess
+import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
@@ -60,6 +62,15 @@ except ImportError:
     print("Warning: google_scrape.py not found. Deal analysis will be skipped.")
     GOOGLE_SCRAPE_AVAILABLE = False
     scrape_google_shopping_deals = None
+
+# Import TTS functionality
+try:
+    from elevenlabs_tts import ElevenLabsTTS
+    TTS_AVAILABLE = True
+except ImportError:
+    print("Warning: elevenlabs_tts.py not found. Text-to-speech will be disabled.")
+    TTS_AVAILABLE = False
+    ElevenLabsTTS = None
 
 # Center region detection (as percentage of frame)
 CENTER_REGION_WIDTH = 0.3   # 30% of frame width
@@ -144,9 +155,20 @@ DEAL_ANALYSIS_PROMPT = (
 )
 
 class CenterObjectClassifier:
-    def __init__(self):
+    def __init__(self, enable_tts=False):
         self.gemini_client = None
         self.captures_dir = CAPTURES_DIR
+        self.enable_tts = enable_tts and TTS_AVAILABLE
+        self.tts_service = None
+        
+        # Initialize TTS if enabled
+        if self.enable_tts:
+            try:
+                self.tts_service = ElevenLabsTTS()
+                print("🔊 Text-to-speech enabled")
+            except Exception as e:
+                print(f"⚠️ Could not initialize TTS: {e}")
+                self.enable_tts = False
         self.last_capture_time = 0
         self.frame_count = 0
         self.background_subtractor = cv2.createBackgroundSubtractorMOG2(detectShadows=True)
@@ -175,6 +197,10 @@ class CenterObjectClassifier:
         # Deal analysis tracking
         self.deal_analysis_results = []  # Store all deal analysis results
         self.deal_analysis_cache = {}  # Cache deal analysis by product name {item_key: deal_analysis}
+        self.spoken_items = set()  # Track which items have been spoken already
+        self.window_shown = False  # Track if CV2 window has been displayed
+        self.pending_speech = []  # Queue for speech that needs to wait for window
+        self.current_audio_process = None  # Track current playing audio to allow interruption
         
         # Create captures directory
         self.captures_dir.mkdir(exist_ok=True)
@@ -322,8 +348,8 @@ class CenterObjectClassifier:
             if item_key in self.cart:
                 self.cart[item_key]['deal_analysis'] = cached_analysis
             
-            # Print the cached analysis summary
-            self.print_deal_analysis_summary(cached_analysis, object_name)
+            # Print the cached analysis summary (with item_key to prevent re-speaking)
+            await self.print_deal_analysis_summary(cached_analysis, object_name, item_key)
             return
             
         try:
@@ -363,8 +389,8 @@ class CenterObjectClassifier:
                     }
                     self.deal_analysis_results.append(deal_record)
                     
-                    # Print deal analysis summary
-                    self.print_deal_analysis_summary(deal_analysis, object_name)
+                    # Print deal analysis summary (with item_key to track if already spoken)
+                    await self.print_deal_analysis_summary(deal_analysis, object_name, item_key)
                 else:
                     print(f"❌ Failed to analyze deals for {object_name}")
             else:
@@ -373,19 +399,79 @@ class CenterObjectClassifier:
         except Exception as e:
             print(f"❌ Error performing deal analysis for {object_name}: {e}")
     
-    def print_deal_analysis_summary(self, deal_analysis: Dict[str, Any], item_name: str):
+    async def speak_text(self, text: str, item_key: str = None):
+        """Speak text using TTS if enabled (non-blocking, interruptible)"""
+        if not self.enable_tts or not self.tts_service:
+            return
+        
+        # If window not shown yet, queue the speech for later
+        if not self.window_shown:
+            print("🔇 Queuing speech for after video window appears...")
+            self.pending_speech.append((text, item_key))
+            return
+        
+        try:
+            # Stop any currently playing audio
+            if self.current_audio_process and self.current_audio_process.poll() is None:
+                print("🔇 Interrupting previous audio...")
+                self.current_audio_process.terminate()
+                self.current_audio_process.wait()
+            
+            print(f"🔊 Speaking: {text[:50]}...")
+            # Run TTS in a thread to avoid blocking
+            audio_data = await asyncio.to_thread(self.tts_service.text_to_speech, text)
+            
+            # Play the audio using a simple method
+            # Save to temp file and play
+            import tempfile
+            import subprocess
+            
+            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as f:
+                f.write(audio_data)
+                temp_file = f.name
+            
+            # Play audio in background (non-blocking)
+            if os.name == 'posix':  # macOS/Linux
+                self.current_audio_process = subprocess.Popen(['afplay', temp_file])
+            elif os.name == 'nt':  # Windows
+                self.current_audio_process = subprocess.Popen(['start', temp_file], shell=True)
+            
+            print(f"🎵 Audio playing in background...")
+                    
+        except Exception as e:
+            print(f"⚠️ TTS error: {e}")
+    
+    async def print_deal_analysis_summary(self, deal_analysis: Dict[str, Any], item_name: str, item_key: str = None):
         """Print a summary of the deal analysis"""
         print(f"\n💰 Shopping Assistant for {item_name}:")
         print("-" * 50)
         
+        # Collect messages to speak
+        messages_to_speak = []
+        
         # Show the two conversational messages
         if deal_analysis.get('best_deal_message'):
-            print(f"🛍️  {deal_analysis['best_deal_message']}")
+            msg = deal_analysis['best_deal_message']
+            print(f"🛍️  {msg}")
+            messages_to_speak.append(msg)
         
         if deal_analysis.get('alternative_message'):
-            print(f"💡 {deal_analysis['alternative_message']}")
+            msg = deal_analysis['alternative_message']
+            print(f"💡 {msg}")
+            messages_to_speak.append(msg)
         
         print("-" * 50)
+        
+        # Speak the recommendations if TTS is enabled and not already spoken
+        if self.enable_tts and messages_to_speak and item_key:
+            if item_key not in self.spoken_items:
+                full_message = " ".join(messages_to_speak)
+                # Mark as spoken BEFORE calling speak_text to prevent duplicates
+                self.spoken_items.add(item_key)
+                await self.speak_text(full_message, item_key)
+                print(f"🔊 Spoken recommendation for: {item_name}")
+            else:
+                print(f"🔇 Already spoken for: {item_name} (skipping)")
     
     def print_cart(self):
         """Print the current shopping cart"""
@@ -1196,6 +1282,14 @@ class CenterObjectClassifier:
             print(f"Could not open {source_name}")
             return
         
+        # Clear cache at the start of each run (after video is opened)
+        self.deal_analysis_cache.clear()
+        self.spoken_items.clear()
+        print("🔄 Cache cleared for new run")
+        
+        # Track if window has been shown
+        window_shown = False
+        
         print(f"{source_name.capitalize()} opened successfully!")
         print("Press 'q' to quit, 's' to save current frame manually, 'c' to show cart")
         print("Center region detection is active - motion and scene changes will be automatically captured")
@@ -1311,6 +1405,22 @@ class CenterObjectClassifier:
                 window_title = f"Center Object Classifier - {source_name}"
                 cv2.imshow(window_title, frame)
                 
+                # Mark window as shown after first display
+                if not window_shown:
+                    window_shown = True
+                    # Store in instance variable so TTS knows window is ready
+                    self.window_shown = True
+                    
+                    # Play any queued speech now that window is visible (non-blocking)
+                    if self.pending_speech:
+                        print(f"🔊 Playing {len(self.pending_speech)} queued speech items...")
+                        for speech_text, speech_item_key in self.pending_speech:
+                            # Check if already spoken (it should be marked already)
+                            if speech_item_key and speech_item_key in self.spoken_items:
+                                # Just play the audio, don't add to spoken_items again
+                                await self.speak_text(speech_text, speech_item_key)
+                        self.pending_speech.clear()
+                
                 # Handle key presses
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('q'):
@@ -1346,13 +1456,20 @@ async def main():
     
     # Check for command line arguments
     video_source = None
+    enable_tts = False
+    
     if len(sys.argv) > 1:
         video_source = sys.argv[1]
         print(f"Using video source: {video_source}")
     else:
         print("No video file specified, using camera")
     
-    classifier = CenterObjectClassifier()
+    # Check for TTS flag
+    if '--tts' in sys.argv or '--speak' in sys.argv:
+        enable_tts = True
+        print("🔊 Text-to-speech mode enabled")
+    
+    classifier = CenterObjectClassifier(enable_tts=enable_tts)
     await classifier.run(video_source)
 
 if __name__ == "__main__":
