@@ -5,7 +5,7 @@ import { TopNavigation } from "@/components/TopNavigation";
 import { BudgetCard } from "@/components/BudgetCard";
 import { SustainabilityCard } from "@/components/SustainabilityCard";
 import { CartItem, CartItemType } from "@/components/CartItem";
-import { GlassesVideoFeed } from "@/components/GlassesVideoFeed";
+import { BackendVideoFeed } from "@/components/BackendVideoFeed";
 import { BudgetPreferencesDialog } from "@/components/BudgetPreferencesDialog";
 // import { SustainabilityMap } from "@/components/SustainabilityMap";
 import { Button } from "@/components/ui/button";
@@ -253,7 +253,7 @@ const Dashboard = () => {
           {/* Left Column - Video Feed */}
           <div className="lg:w-80 flex-shrink-0">
             <div className="sticky top-8">
-              <GlassesVideoFeed isActive={syncEnabled} />
+              <BackendVideoFeed isActive={syncEnabled} />
             </div>
           </div>
 
