@@ -78,3 +78,9 @@ Thumbs.db
 *.jpg
 *.png
 *.jpeg
+# Large assets stripped from git history — kept local only
+backend/captures/
+backend/weights/
+models/
+*.pt
+*.MOV

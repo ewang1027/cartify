@@ -51,7 +51,6 @@ The flow: the glasses livestream to an RTMP endpoint (a webcam or recorded video
 | `vision_backends/` | CV pipeline — detection, hands, depth, OCR, Gemini extraction. `video_product_pipeline.py` runs it over a video. |
 | `backend/` | Scoring engine and APIs — price scraping, nutrition, sentiment, Ray-Ban TTS endpoints. |
 | `frontend/` | React dashboard — landing page, live feed, cart, budget, sustainability cards. |
-| `models/` | Depth Anything V2 Small (Core ML). |
 
 ## Running it
 
@@ -81,4 +80,6 @@ Endpoint details live in `backend/README.md` and `backend/RAY_BANS_SETUP_GUIDE.m
 
 ## Notes
 
-This is a hackathon build — expect rough edges. Model weights are checked into the repo, the services assume localhost, and several files in `vision_backends/` are alternative experiments rather than parts of the final pipeline.
+This is a hackathon build — expect rough edges. The services assume localhost, and several files in `vision_backends/` are alternative experiments rather than parts of the final pipeline.
+
+Model weights are not checked in (they were keeping the repo at half a gigabyte). To run the vision pipeline you need: `backend/yolov8n.pt` (Ultralytics downloads it automatically on first use), `models/DepthAnythingV2SmallF16.mlpackage` (Apple's Core ML conversion of Depth Anything V2 Small, on Hugging Face), and the custom SKU-detection weights in `backend/weights/`, which were trained during the hackathon and aren't distributed.
