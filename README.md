@@ -6,41 +6,56 @@ Built in 36 hours at HackHarvard 2025.
 
 Cartify turns Ray-Ban Meta smart glasses into a real-time shopping assistant. As you walk through a store, the glasses' live video feed is analyzed to recognize the products you pick up and add them to a virtual cart — then Cartify compares prices against online listings, scores each item's sustainability, tracks your budget, and reads the results back to you through the glasses' speakers.
 
-## How it works
+## Architecture
 
-1. **Stream** — the glasses livestream to an RTMP endpoint, and the vision service ingests the feed (a regular webcam or a recorded video works too).
-2. **See** — frames are processed at ~1 FPS: a Roboflow SKU-detection workflow finds products, MediaPipe hand tracking plus Depth Anything V2 (Core ML) work out which item you're actually holding, OCR (docTR / Apple Vision) reads the packaging, and Gemini turns the crop and text into a clean product name and brand.
-3. **Score** — the backend searches Google Shopping (via Oxylabs) for price comparison, pulls nutrition data from USDA FoodData Central, runs news sentiment analysis on the brand, and combines everything into a sustainability score covering nutrition, carbon footprint, and social ethics.
-4. **Speak and show** — ElevenLabs text-to-speech announces price differences and eco-scores through the glasses, while the web dashboard displays the live annotated feed, your cart, budget status, and per-item scores.
+```mermaid
+flowchart LR
+    G(["Ray-Ban Meta glasses"])
+
+    subgraph VP["Vision pipeline (~1 FPS)"]
+        direction TB
+        DET["Roboflow SKU detection"]
+        HAND["MediaPipe hands + Depth Anything V2<br/>(which item is in hand)"]
+        OCR["OCR (docTR / Apple Vision)"]
+        GEM["Gemini: product name + brand"]
+        DET --> GEM
+        HAND --> GEM
+        OCR --> GEM
+    end
+
+    subgraph BE["Backend"]
+        direction TB
+        SCORE["Scoring API · Flask :5008<br/>Oxylabs prices · USDA nutrition · news sentiment"]
+        CART["Cart API · FastAPI :8000<br/>cart items + captured crops"]
+        VS["Video stream · Socket.IO :5001<br/>annotated live feed"]
+        TTS["ElevenLabs TTS"]
+        SCORE --> TTS
+    end
+
+    FE["React dashboard · Vite :8080<br/>cart · budget · eco scores · live feed"]
+
+    G -- "RTMP livestream" --> VP
+    GEM -- "results.json + crops" --> CART
+    GEM --> SCORE
+    TTS -- "voice announcements" --> G
+    CART --> FE
+    VS --> FE
+```
+
+The flow: the glasses livestream to an RTMP endpoint (a webcam or recorded video works too). Frames are processed at ~1 FPS — Roboflow finds products, hand tracking plus depth estimation pick out the item you're actually holding, OCR reads the packaging, and Gemini resolves it all to a product name and brand. The backend then prices the product on Google Shopping, pulls USDA nutrition data and news sentiment, and rolls everything into a sustainability score. ElevenLabs announces prices and eco-scores through the glasses while the dashboard shows the cart, budget, and annotated feed live.
 
 ## Repo layout
 
 | Path | What it is |
 |---|---|
-| `vision_backends/` | Computer-vision pipeline: Roboflow SKU detection, YOLO variants, MediaPipe hands, Core ML depth, OCR, SAM, and the Gemini product-extraction step. `video_product_pipeline.py` runs the full pipeline over a video. |
-| `backend/` | Sustainability scoring engine and APIs: Google Shopping scraping, USDA nutrition, news sentiment, Ray-Ban live-stream endpoints, and ElevenLabs TTS. |
-| `frontend/` | React dashboard: landing page, live video feed, cart, budget tracking, and sustainability cards. |
-| `models/` | Depth Anything V2 Small (Core ML) used for depth estimation. |
-
-## Services
-
-| Service | Port | Start with |
-|---|---|---|
-| Sustainability API (Flask) | 5008 | `python3 backend/start_api.py` |
-| Shopping cart API (FastAPI) | 8000 | `python3 backend/shopping_cart_api.py` |
-| Video stream server (Flask-SocketIO) | 5001 | `python3 backend/video_stream_server.py` |
-| Frontend (Vite) | 8080 | `npm run dev` in `frontend/` |
+| `vision_backends/` | CV pipeline — detection, hands, depth, OCR, Gemini extraction. `video_product_pipeline.py` runs it over a video. |
+| `backend/` | Scoring engine and APIs — price scraping, nutrition, sentiment, Ray-Ban TTS endpoints. |
+| `frontend/` | React dashboard — landing page, live feed, cart, budget, sustainability cards. |
+| `models/` | Depth Anything V2 Small (Core ML). |
 
 ## Running it
 
-### Backend
-
-```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-Create a `.env` file in `backend/` with your own keys:
+**Backend** — create a venv, `pip install -r requirements.txt`, then put your own keys in `backend/.env`:
 
 ```bash
 OXYLABS_USERNAME=...      # Google Shopping scraping
@@ -52,46 +67,18 @@ ELEVENLABS_API_KEY=...    # text-to-speech
 ELEVENLABS_VOICE_ID=...
 ```
 
-Then start the services:
-
 ```bash
 python3 backend/start_api.py            # scoring API on :5008
 python3 backend/shopping_cart_api.py    # cart API on :8000
 python3 backend/video_stream_server.py  # annotated video feed on :5001
 ```
 
-### Vision pipeline
+**Vision** — `python3 vision_backends/start_vision_app.py` for live RTMP/camera ingest, or run the full pipeline over a recording with `python3 vision_backends/video_product_pipeline.py path/to/video.mp4`.
 
-Run the full detection pipeline over a recorded video:
+**Frontend** — `cd frontend && npm install && npm run dev`. Set `VITE_BACKEND_URL` if the cart API isn't on `http://localhost:8000`.
 
-```bash
-python3 vision_backends/video_product_pipeline.py path/to/video.mp4
-```
-
-Or start the live vision app (RTMP/camera ingest):
-
-```bash
-python3 vision_backends/start_vision_app.py
-```
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Set `VITE_BACKEND_URL` if the cart API isn't on `http://localhost:8000`.
-
-## API highlights
-
-- `POST /grocery/search` · `POST /grocery/analyze` · `POST /grocery/category` — product search and sustainability scoring (`:5008`)
-- `POST /ray-ban/start-stream` · `POST /ray-ban/analyze-product` · `POST /ray-ban/quick-alert` — live-session endpoints that generate TTS announcements for the glasses (`:5008`)
-- `GET /shopping-cart/with-urls` · `GET /all-items` · `GET /deal-analysis` — detected cart contents with captured product images (`:8000`)
-
-See `backend/README.md` and `backend/RAY_BANS_SETUP_GUIDE.md` for details.
+Endpoint details live in `backend/README.md` and `backend/RAY_BANS_SETUP_GUIDE.md`.
 
 ## Notes
 
-This is a hackathon build — expect rough edges. Model weights are checked into the repo, the services assume localhost, and several vision backends in `vision_backends/` are alternative experiments rather than parts of the final pipeline.
+This is a hackathon build — expect rough edges. Model weights are checked into the repo, the services assume localhost, and several files in `vision_backends/` are alternative experiments rather than parts of the final pipeline.
