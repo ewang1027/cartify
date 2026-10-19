@@ -35,7 +35,7 @@ ELEVENLABS_VOICE_ID=pNInz6obpgDQGcFmaJgB
 ### 1. Start the API Server
 
 ```bash
-cd /Users/ethanwang/hackharvard/google-gemini/backend
+cd backend
 python3 start_api.py
 ```
 
@@ -128,7 +128,7 @@ curl -X POST http://localhost:5008/ray-ban/stop-stream
 
 ### Run the Demo
 ```bash
-cd /Users/ethanwang/hackharvard/google-gemini/backend
+cd backend
 python3 ray_ban_demo.py
 ```
 

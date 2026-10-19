@@ -21,7 +21,7 @@ from flask_socketio import SocketIO, emit
 
 # Import your existing sustainability components
 import sys
-sys.path.append('/Users/ethanwang/hackharvard/google-gemini/backend')
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
 
 from real_grocery_scorer_oxylabs import RealGroceryScorerOxylabs
 from nutrition_fetcher import NutritionFetcher

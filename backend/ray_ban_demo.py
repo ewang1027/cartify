@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from ray_ban_integration import RayBanLiveStreamer
 
 # Load environment variables
-load_dotenv('/Users/ethanwang/hackharvard/google-gemini/backend/.env')
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
 
 def demo_live_shopping_session():
     """

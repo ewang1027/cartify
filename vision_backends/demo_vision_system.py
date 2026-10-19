@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 # Add backend to path
-sys.path.append('/Users/ethanwang/hackharvard/google-gemini/backend')
+sys.path.append(str(Path(__file__).resolve().parent.parent / 'backend'))
 
 def load_environment_variables():
     """Load environment variables from .env file"""
